@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Embeddings — MicroGPT Course</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<button id="hamburger">&#9776;</button>
+<nav id="sidebar"></nav>
+<div class="progress-bar"><div class="fill"></div></div>
+<main id="content">
+
+  <h1>Embeddings</h1>
+  <p class="subtitle">
+    <span class="difficulty beginner">Beginner</span>
+    &nbsp; How a computer turns letters into lists of numbers it can actually do math with.
+  </p>
+
+  <div class="box info">
+    <strong>The one-sentence version</strong>
+    An <em>embedding</em> is just a lookup table that maps each character to a small list of numbers (a vector), and the model gets to <em>learn</em> what those numbers should be.
+  </div>
+
+  <h2>The Problem: Computers Only Understand Numbers</h2>
+  <p>
+    Here is an uncomfortable truth that everything in this chapter is built to solve: a neural network cannot add, multiply, or compare the letter <code>'a'</code>. It has no idea what a letter <em>is</em>. The only thing it can do — the <strong>only</strong> thing — is arithmetic on numbers: <code>0.3 &times; 1.7</code>, <code>2.1 + 0.4</code>, and so on, millions of times.
+  </p>
+  <p>
+    So before our GPT can process the name <code>"cat"</code>, we have to answer a deceptively simple question:
+  </p>
+  <div class="box warn">
+    <strong>The core question</strong>
+    How do we turn a character like <code>'c'</code> into number(s) — in a way that lets the model discover that <code>'c'</code> and <code>'k'</code> often play similar roles, while <code>'c'</code> and <code>'q'</code> do not?
+  </div>
+
+  <p>
+    Our model has a fixed alphabet. In the names dataset, that's the 26 lowercase letters <code>a</code>–<code>z</code> plus one special <strong>BOS</strong> token (<em>Beginning Of Sequence</em> — a marker that says "a name starts here"). That's <strong>27 symbols total</strong>. We call this set the <strong>vocabulary</strong>, and its size is <code>vocabSize = 27</code>.
+  </p>
+
+  <div class="box tip">
+    <strong>Tokens, not always letters</strong>
+    In our micro-GPT, one token = one character. In ChatGPT, one token is usually a chunk of a word (like <code>" the"</code> or <code>"ing"</code>) and the vocabulary has ~100,000 entries. The mechanism is <em>identical</em>; only the vocabulary changes. We use characters because they're easy to see.
+  </div>
+
+  <h2>First Attempt: One-Hot Encoding</h2>
+  <p>
+    The most obvious way to turn 27 symbols into numbers: give each one a slot. Make a list of 27 zeros, and put a single <code>1</code> in the slot that belongs to that character. Everything else stays <code>0</code>. Because exactly <em>one</em> entry is "hot" (set to 1), this is called <strong>one-hot encoding</strong>.
+  </p>
+
+  <p>It looks like this (showing only the first few slots of each 27-long vector):</p>
+  <table>
+    <tr><th>Character</th><th>Slot</th><th>One-hot vector (27 numbers)</th></tr>
+    <tr><td><strong>a</strong></td><td>0</td><td><code>[1, 0, 0, 0, 0, &hellip;, 0]</code></td></tr>
+    <tr><td><strong>b</strong></td><td>1</td><td><code>[0, 1, 0, 0, 0, &hellip;, 0]</code></td></tr>
+    <tr><td><strong>c</strong></td><td>2</td><td><code>[0, 0, 1, 0, 0, &hellip;, 0]</code></td></tr>
+    <tr><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td></tr>
+    <tr><td><strong>z</strong></td><td>25</td><td><code>[0, 0, &hellip;, 0, 1, 0]</code></td></tr>
+    <tr><td><strong>BOS</strong></td><td>26</td><td><code>[0, 0, &hellip;, 0, 0, 1]</code></td></tr>
+  </table>
+
+  <p>
+    Think of it like a row of 27 light switches, one per character. To represent <code>'c'</code>, you flip switch #2 on and leave the other 26 off. It's unambiguous and trivially easy to build. Try it:
+  </p>
+
+  <div class="demo">
+    <h4>Demo 1 — One-hot encoder</h4>
+    <p style="font-size:.9em;color:#555;margin-bottom:10px;">Pick a character and watch its 27-number one-hot vector light up. Each cell is one slot in the vector.</p>
+    <div class="controls">
+      <label for="oneHotSelect">Character:</label>
+      <select id="oneHotSelect"></select>
+    </div>
+    <canvas id="oneHotCanvas" width="760" height="90"></canvas>
+    <div class="output" id="oneHotOut"></div>
+  </div>
+
+  <h3>Why one-hot is not good enough</h3>
+  <p>
+    One-hot works, but it has a fatal flaw for learning. Measure the "distance" between any two different characters and you always get the <em>same</em> answer. <code>'a'</code> is exactly as far from <code>'b'</code> as it is from <code>'z'</code>. Every pair is equidistant.
+  </p>
+  <div class="box danger">
+    <strong>The flaw</strong>
+    One-hot vectors carry <em>zero</em> information about <em>relationships</em>. The encoding insists every character is an isolated island, equally unrelated to every other. But we <em>want</em> the model to notice that vowels behave alike, or that names often end in certain letters. One-hot makes that impossible to express.
+  </div>
+  <p>
+    There's a second, more practical problem: size. With 27 characters the vectors are 27 long — annoying but fine. With ChatGPT's 100,000-token vocabulary, every single token would be a vector of 100,000 numbers, almost all zeros. That's enormously wasteful.
+  </p>
+
+  <div class="box info">
+    <strong>But why not just use one-hot encoding and be done with it?</strong>
+    Because one-hot encoding insists that every character is <em>equally</em> different from every other one. By its math, <code>'a'</code> is exactly as far from <code>'b'</code> as it is from <code>'z'</code> — there's no notion of "more similar" or "less similar" anywhere in it. But in reality vowels behave more like each other than like consonants, and we <em>want</em> the model to be able to discover and use that. One-hot slams the door on it before training even starts. Learned embeddings leave the door open: similar characters can drift close together as the model learns.
+  </div>
+
+  <h2>The Real Solution: Learned Embeddings</h2>
+  <p>
+    Here's the key idea, and it's the heart of the chapter. Instead of <em>hardcoding</em> the numbers for each character, we let the model <strong>learn</strong> them.
+  </p>
+  <p>
+    We make a much smaller vector for each character — in our code, <strong>16 numbers</strong> instead of 27. We call this size <code>nEmbd = 16</code> (short for "number of embedding dimensions"). At the very start of training, we fill these 16 numbers with small <em>random</em> values. They're meaningless noise. Then, as the model trains on thousands of names, it nudges these numbers up and down, over and over, until they become genuinely useful.
+  </p>
+
+  <div class="box tip">
+    <strong>Real-life analogy</strong>
+    An embedding is a personality test. Imagine everyone takes a 16-question test
+    and gets 16 scores: <code>[creativity: 8, empathy: 9, logic: 6, &hellip;]</code>.
+    Two people with similar scores are "similar personalities" — even though the
+    numbers are a crude simplification of a whole human. Embeddings work the same
+    way: each character gets 16 scores that capture its "personality" in the context
+    of name generation, and the model invents the questions itself.
+  </div>
+
+  <div class="box info">
+    <strong>But why <em>random</em> values? Why not start them all at zero, or some sensible guess?</strong>
+    This is worth slowing down for. The honest answer is: <em>we don't know</em> what the best embedding numbers are — discovering them is the entire point of training. So we start from noise, and three properties of that noise matter:
+    <ul>
+      <li><strong>Not all the same</strong> — if every character started with identical numbers, every character would look identical to the model, and it could never tell <code>'a'</code> from <code>'b'</code>. The values must differ so the characters can <em>become</em> different. (This is called "breaking symmetry.")</li>
+      <li><strong>Small</strong> — large starting numbers blow up when multiplied together through the network, causing numerical instability. Small values keep the early math well-behaved.</li>
+      <li><strong>Random</strong> — randomness is the simplest way to guarantee every character starts <em>slightly</em> different, so each one can evolve down its own path during training.</li>
+    </ul>
+    Random noise, gently shaped by a thousand corrections, is how meaningless numbers turn into meaningful ones.
+  </div>
+
+  <div class="box info">
+    <strong>Analogy: describing people with sliders</strong>
+    Imagine describing every person you know with 16 sliders: "how tall", "how loud", "how into sports", and so on. People who are similar end up with similar slider settings, and you can do math on them. An embedding is exactly this, except the model invents the 16 sliders itself — and the sliders rarely map to anything a human would name. They just have to be <em>useful for predicting the next character</em>.
+  </div>
+
+  <div class="box info">
+    <strong>But why 16 dimensions? Why not 4, or 1,000?</strong>
+    It's a balancing act. More dimensions give the model more "sliders" — more room to encode subtle distinctions between characters. But every extra dimension is also more numbers to learn, and with our tiny names dataset, too many would let the model <em>overfit</em> (memorize the training names instead of learning general patterns). Too few, and it can't express enough to be useful. 16 is the sweet spot for a toy this size. GPT-4 uses ~12,000 dimensions — but it can afford that richness because it trains on a substantial fraction of the internet, with enough examples to fill all that space meaningfully.
+  </div>
+
+  <p>In the Java code, creating this table of learnable numbers is a single line:</p>
+  <pre><code class="language-java">// vocabSize = 27 (a-z + BOS), nEmbd = 16
+// matrix(rows, cols) makes a grid of learnable numbers, randomly initialized
+sd.put("wte", matrix(vocabSize, nEmbd));</code></pre>
+  <p>
+    <code>wte</code> stands for <strong>"word token embedding"</strong> (the name comes from Karpathy's original; for us it's really a <em>character</em> embedding). <code>sd</code> is the <em>state dictionary</em> — a big <code>Map</code> holding every learnable group of numbers in the whole model. So this line says: "create a grid with 27 rows and 16 columns, fill it with small random numbers, and remember it under the name <code>wte</code>."
+  </p>
+
+  <div class="box tip">
+    <strong>An embedding table is literally a 2D array</strong>
+    Forget the fancy word. <code>wte</code> is just a <code>Value[27][16]</code> — 27 rows (one per character), each row holding 16 numbers. Row 0 is BOS's vector, row 1 is <code>'a'</code>'s vector, and so on. (<code>Value</code> is our custom number type that also tracks gradients — that's Chapter 5. For now, read <code>Value</code> as "a double that remembers how to learn.")
+  </div>
+
+  <div class="box tip">
+    <strong>Concrete example</strong>
+    <p><strong>Input:</strong> the letter <code>'c'</code>, whose token id is <code>2</code>
+    (a=0, b=1, c=2, &hellip; z=25, BOS=26).</p>
+    <p><strong>Lookup:</strong> grab row 2 of <code>wte</code> — just
+    <code>sd.get("wte")[2]</code>, an array index, not a calculation.</p>
+    <p><strong>Output:</strong>
+    <code>[0.05, &minus;0.08, 0.12, 0.03, &minus;0.11, 0.07, 0.14, &minus;0.02, 0.09, &minus;0.06, 0.01, 0.10, &minus;0.04, 0.08, &minus;0.13, 0.05]</code>
+    (16 numbers).</p>
+    <p>These 16 numbers <em>are</em> the model's current understanding of <code>'c'</code>.
+    They start as small random noise and get nudged during training until letters that
+    behave alike (like <code>'c'</code> and <code>'k'</code>) end up with similar rows.</p>
+  </div>
+
+  <h2>Embedding Lookup: It's Just Array Indexing</h2>
+  <p>
+    Once the table exists, using it is the least mysterious operation in all of deep learning. To get the vector for a character, you convert it to its slot number (its <strong>token id</strong>) and index into the array. That's it.
+  </p>
+  <pre><code class="language-java">// 'c' is the 4th symbol, so tokenId = 3
+int tokenId = 3;
+
+// Look up row 3 of the embedding table — a 16-number vector
+Value[] tok_emb = sd.get("wte")[tokenId];
+
+// tok_emb is now the 16 learned numbers that represent 'c'</code></pre>
+  <p>
+    Compare the two approaches side by side:
+  </p>
+  <div class="columns">
+    <div class="col">
+      <h4>One-hot</h4>
+      <ul>
+        <li>27 numbers per character</li>
+        <li>Fixed forever, never changes</li>
+        <li>All characters equidistant</li>
+        <li>Encodes <em>identity</em> only</li>
+      </ul>
+    </div>
+    <div class="col">
+      <h4>Learned embedding</h4>
+      <ul>
+        <li>16 numbers per character</li>
+        <li>Adjusted during training</li>
+        <li>Similar characters end up close</li>
+        <li>Encodes <em>meaning / behavior</em></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="box info">
+    <strong>Where does one-hot go, then?</strong>
+    It doesn't fully vanish — an embedding lookup is mathematically the same as multiplying a one-hot vector by the embedding table. Picking row 3 is what you get if you multiply <code>[0,0,0,1,0,&hellip;]</code> by the table. The lookup is just the fast shortcut for that multiplication. Same idea, no wasted zeros.
+  </div>
+
+  <h2>Worked Example: From One Letter to a Whole Word</h2>
+
+  <h3>Step 1 (simple) — embed <code>'a'</code></h3>
+  <p><code>'a'</code> has token id <code>1</code>, so we grab row 1 of <code>wte</code>. After training it might look like this (16 numbers, made up here for illustration):</p>
+  <div class="math-block">
+    'a' &rarr; [ 0.21, &minus;0.05, 0.88, 0.14, &minus;0.62, 0.07, 0.33, &minus;0.41, 0.19, 0.55, &minus;0.12, 0.02, 0.71, &minus;0.28, 0.44, &minus;0.09 ]
+  </div>
+  <p>That single row of 16 numbers is the model's entire internal idea of "a-ness."</p>
+
+  <h3>Step 2 (medium) — embed <code>"cat"</code></h3>
+  <p>A word is just a sequence of characters, so we look up one row per character and stack them. <code>"cat"</code> = <code>c</code>(3), <code>a</code>(1), <code>t</code>(20):</p>
+  <div class="math-block" style="text-align:left;line-height:2;">
+    'c' &rarr; [ &minus;0.33, 0.41, 0.02, &hellip; ]&nbsp;&nbsp;<span style="color:#888">(16 numbers)</span><br>
+    'a' &rarr; [ &nbsp;0.21, &minus;0.05, 0.88, &hellip; ]&nbsp;&nbsp;<span style="color:#888">(16 numbers)</span><br>
+    't' &rarr; [ &nbsp;0.60, 0.17, &minus;0.44, &hellip; ]&nbsp;&nbsp;<span style="color:#888">(16 numbers)</span>
+  </div>
+  <p>
+    So <code>"cat"</code> becomes a small grid: <strong>3 rows &times; 16 columns</strong> = 48 numbers total. This grid is what actually flows into the rest of the network. Everything downstream — attention, the layers, the final prediction — operates on grids of numbers like this one, never on letters.
+  </p>
+
+  <h3>Step 3 (advanced) — what these numbers come to mean</h3>
+  <p>
+    In our tiny model the 16 numbers are hard to interpret by eye. But in large models trained on real language, the learned vectors capture genuinely astonishing structure. The most famous example, from a 2013 model called <strong>Word2Vec</strong>:
+  </p>
+  <div class="math-block">
+    vector("king") &minus; vector("man") + vector("woman") &asymp; vector("queen")
+  </div>
+  <p>
+    Read that as arithmetic on meaning. Start at "king", subtract the "man" direction, add the "woman" direction, and you land almost exactly on "queen". The model was never told what royalty or gender are — it discovered that some directions in its embedding space correspond to "gender" and others to "royalty", purely from seeing how words are used. Same trick gives <code>Paris &minus; France + Italy &asymp; Rome</code>.
+  </p>
+  <div class="box tip">
+    <strong>Same idea, bigger numbers</strong>
+    Word2Vec used ~300 dimensions; GPT-4 uses ~12,000. Our micro-GPT uses 16, on single characters. The principle is unchanged: <em>meaning becomes geometry</em>. Related things sit near each other; relationships become directions you can add and subtract.
+  </div>
+
+  <h2>Seeing Embeddings as Space</h2>
+  <p>
+    Sixteen dimensions is impossible to picture. So below is a <strong>2D toy</strong>: each of the 26 letters placed on a flat map, arranged so that letters which behave similarly sit near each other (vowels cluster together; some related consonants are placed nearby). Real embeddings aren't laid out by hand like this — the model learns the positions — but the <em>shape of the idea</em> is exactly this: a cloud of points where distance means similarity.
+  </p>
+
+  <div class="demo">
+    <h4>Demo 2 — A 2D embedding space</h4>
+    <p style="font-size:.9em;color:#555;margin-bottom:10px;">Hover a dot to see its letter. Click two letters to measure the distance between them. Notice the vowels (highlighted) huddle together.</p>
+    <canvas id="spaceCanvas" width="760" height="420"></canvas>
+    <div class="output" id="spaceOut">Hover over a dot, or click two of them.</div>
+  </div>
+
+  <div class="box info">
+    <strong>What "close" buys you</strong>
+    If <code>'c'</code> and <code>'k'</code> sit near each other, then anything the model learns about <code>'c'</code> partially transfers to <code>'k'</code> for free. That's the whole payoff: the model doesn't have to learn every character from scratch in isolation — it can generalize across similar ones. One-hot encoding throws this away entirely.
+  </div>
+
+  <h2>One More Piece: Position Embeddings</h2>
+  <p>
+    There's a gap in everything so far. The embedding for <code>'a'</code> is the same row of <code>wte</code> whether <code>'a'</code> is the first letter of a name or the fifth. But position obviously matters — a letter at the start of a name plays a different role than the same letter at the end. The token embedding alone is <em>position-blind</em>.
+  </p>
+
+  <div class="box info">
+    <strong>But why does the model need position information at all?</strong>
+    Because the transformer treats each position somewhat independently — it doesn't have a built-in sense of order the way you do when you read left to right. Without a position signal, the model would think an <code>'a'</code> at the start of a name is the very same thing as an <code>'a'</code> five letters in. And position matters enormously: the first letter of a name follows completely different statistics than the fifth (names rarely <em>start</em> with certain letters but often end with them). Position embeddings hand the model the "where am I?" information it would otherwise be blind to.
+  </div>
+  <p>
+    The fix is a second table, built exactly like the first, but indexed by <strong>position</strong> instead of by character:
+  </p>
+  <pre><code class="language-java">// blockSize = 16 (the most characters we look at at once)
+// One learnable 16-number vector PER position slot
+sd.put("wpe", matrix(blockSize, nEmbd));</code></pre>
+  <p>
+    <code>wpe</code> = <strong>"word position embedding"</strong>. Position 0 gets its own 16 numbers, position 1 gets a different 16, &hellip; up to position 15. These are learned too — the model figures out how to encode "I am near the start" or "I am near the end."
+  </p>
+  <p>
+    The two embeddings combine by plain element-wise addition. For a character at a given spot, its final input vector is:
+  </p>
+  <div class="math-block">
+    final = token_embedding + position_embedding
+  </div>
+  <p>
+    That's literally adding two 16-number vectors slot by slot to get one 16-number result. The sum carries <em>both</em> "which character" and "where it sits" in a single bundle — which is exactly what the rest of the network needs.
+  </p>
+
+  <div class="box tip">
+    <strong>Real-life analogy</strong>
+    Position embeddings are seat numbers at a dinner table. The same person (the
+    same token embedding) behaves differently depending on whether they're sitting
+    at the head of the table (position 0) or in the middle (position 5). Adding the
+    position embedding is like handing each guest a place card — it injects the
+    "where am I sitting?" information that the character identity alone can't carry.
+  </div>
+
+  <div class="box tip">
+    <strong>Concrete example</strong>
+    <p>The letter <code>'e'</code> sitting at position 2 of a name:</p>
+    <p><strong>Token embedding</strong> (from <code>wte</code>, "this is an 'e'"):
+    <code>[0.05, &minus;0.08, 0.12, &hellip;]</code></p>
+    <p><strong>Position embedding</strong> (from <code>wpe</code>, "I'm at slot 2"):
+    <code>[0.01, 0.03, &minus;0.02, &hellip;]</code></p>
+    <p><strong>Sum</strong> (element-wise add):
+    <code>[0.06, &minus;0.05, 0.10, &hellip;]</code></p>
+    <p>This single 16-number vector now carries <em>both</em> facts at once: <em>which</em>
+    character it is and <em>where</em> it sits. An <code>'e'</code> at position 0 would
+    start from the same token row but add a different position row, so it ends up as a
+    different vector.</p>
+  </div>
+
+  <div class="demo">
+    <h4>Demo 3 — token + position = final input</h4>
+    <p style="font-size:.9em;color:#555;margin-bottom:10px;">Pick a character and a position. The two vectors (shown as colored bars, one bar per dimension) add together into the final input vector. Bars point up for positive numbers, down for negative.</p>
+    <div class="controls">
+      <label for="addChar">Character:</label>
+      <select id="addChar"></select>
+      <label for="addPos">Position:</label>
+      <select id="addPos"></select>
+    </div>
+    <canvas id="addCanvas" width="760" height="300"></canvas>
+  </div>
+
+  <div class="box tip">
+    <strong>Why add instead of concatenate?</strong>
+    You might expect to glue the two vectors into a 32-long one. Addition keeps the size at 16 (cheaper) and works because the model has enough freedom, while learning, to keep "character info" and "position info" in compatible parts of the vector. It's a standard trick straight out of the original Transformer paper.
+  </div>
+
+  <h2>Recap</h2>
+  <ul>
+    <li>Computers do math on numbers, not letters — so every character must become a vector first.</li>
+    <li><strong>One-hot</strong> gives each of 27 characters a 27-long vector with a single <code>1</code>. Simple, but every character is equidistant and it carries no relationships.</li>
+    <li><strong>Learned embeddings</strong> give each character a short vector (16 numbers, <code>nEmbd</code>) of values the model <em>adjusts during training</em>, so similar characters drift close together.</li>
+    <li>The embedding table <code>wte</code> is literally a <code>Value[27][16]</code> array; a lookup is just <code>sd.get("wte")[tokenId]</code>.</li>
+    <li>A second table <code>wpe</code> encodes <em>position</em>. The model's input for each character is <code>token_embedding + position_embedding</code>.</li>
+    <li>This same idea scales straight up to ChatGPT — just more dimensions, more tokens, more data.</li>
+  </ul>
+
+  <div class="box info">
+    <strong>Next up</strong>
+    Those 27 logits at the model's output need to become probabilities that sum to 1, so the model can actually <em>choose</em> a character. That's the job of <strong>softmax</strong> — Chapter 4.
+  </div>
+
+<h2>Does Input Length Matter for Embeddings?</h2>
+
+<div class="box info">
+  <strong>But wait — does "chocolate" give the same vector as a book about chocolate?</strong>
+  No! This is one of the most common misconceptions about embeddings. Let's clear it up.
+</div>
+
+<h3>Same Topic ≠ Same Vector</h3>
+<p>When you use an embedding API (like Voyage, OpenAI's text-embedding-3, or Google's Gecko), you always get back a <strong>fixed-size vector</strong> — say, 1024 numbers — regardless of whether your input is one word or an entire book. But the vectors will be <strong>different</strong>.</p>
+
+<table>
+  <tr>
+    <th>Input</th>
+    <th>Output dimension</th>
+    <th>What the vector captures</th>
+  </tr>
+  <tr>
+    <td><code>"chocolate"</code></td>
+    <td>1024 numbers</td>
+    <td>The concept of chocolate — food, sweet, brown, cocoa</td>
+  </tr>
+  <tr>
+    <td><code>"I love eating dark chocolate after dinner"</code></td>
+    <td>1024 numbers</td>
+    <td>Chocolate + personal preference + dark variety + timing + eating</td>
+  </tr>
+  <tr>
+    <td><code>"A 200-page book about the history of chocolate"</code></td>
+    <td>1024 numbers</td>
+    <td>Chocolate + history + agriculture + trade routes + manufacturing + culture + ...</td>
+  </tr>
+</table>
+
+<p>The vectors will be <strong>similar</strong> (nearby in the 1024-dimensional space) because they're all about chocolate. But they won't be identical — each one captures different nuances.</p>
+
+<div class="box tip">
+  <strong>Concrete example — cosine similarity</strong>
+  <p>If you compute the similarity (cosine similarity) between these vectors:</p>
+  <ul>
+    <li><code>"chocolate"</code> vs <code>"dark chocolate cake recipe"</code> → similarity ≈ 0.82 (high — same topic)</li>
+    <li><code>"chocolate"</code> vs <code>"quantum physics"</code> → similarity ≈ 0.15 (low — unrelated)</li>
+    <li><code>"chocolate"</code> vs <code>"a 500-word essay about chocolate"</code> → similarity ≈ 0.75 (high but not identical — the essay has extra context)</li>
+  </ul>
+  <p>Similar meaning → nearby vectors. Different meaning → distant vectors. But never identical unless the input is identical.</p>
+</div>
+
+<h3>How Does the Model Compress a Book into 1024 Numbers?</h3>
+<p>The embedding model processes your entire input and produces a <strong>single summary vector</strong>. Think of it like this:</p>
+<ul>
+  <li><strong>Short input</strong> ("chocolate"): the 1024 numbers mostly capture the core concept. Many dimensions are "unused" or carry weak signals.</li>
+  <li><strong>Long input</strong> (a book about chocolate): the 1024 numbers are packed with information — history, manufacturing, trade, culture — but each detail gets a smaller "share" of the 1024 dimensions. Some information is inevitably lost.</li>
+</ul>
+
+<div class="box warn">
+  <strong>The compression tradeoff</strong>
+  A 1024-dimension vector can't perfectly represent a 200-page book. Information IS lost. That's why retrieval systems (like RAG) split documents into <strong>chunks</strong> (paragraphs or pages), embed each chunk separately, and search across all chunks. Embedding the whole book would "dilute" specific details into a single blurry vector.
+</div>
+
+<h3>How Does This Relate to Our MicroGPT?</h3>
+<p>Our microGPT uses <strong>character-level</strong> embeddings: each character ('a', 'b', ..., 'z') gets its own 16-dimensional vector. This is the simplest possible case — one character = one vector, no compression needed.</p>
+<p>Production embedding APIs handle <strong>token sequences</strong>: they process all tokens together through a transformer, then average or pool the outputs into a single vector. The architecture is similar to our GPT — the difference is that production models have been trained specifically to make these summary vectors useful for similarity search.</p>
+
+<div class="box info">
+  <strong>But why doesn't our microGPT produce sentence embeddings?</strong>
+  Because it's a <strong>generative</strong> model (predicts the next character), not an <strong>encoding</strong> model (produces a summary vector). Embedding APIs like Voyage use a different training objective: they learn to put similar texts close together and dissimilar texts far apart. Same transformer architecture, different training goal.
+</div>
+
+  <div class="page-nav"></div>
+</main>
+
+<script src="../js/nav.js"></script>
+<script src="../js/highlight.js"></script>
+
+<script>
+// ── Shared: vocabulary (BOS + a-z) ──
+const VOCAB = ['BOS'];
+for (let i = 0; i < 26; i++) VOCAB.push(String.fromCharCode(97 + i)); // a-z
+// VOCAB.length === 27
+
+// ── Deterministic pseudo-random so "learned" vectors are stable per page load ──
+function seeded(seed) {
+  return function () {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  };
+}
+
+// ─────────────────────────────────────────────────────────
+// DEMO 1 — One-hot encoder
+// ─────────────────────────────────────────────────────────
+(function () {
+  const sel = document.getElementById('oneHotSelect');
+  const cv = document.getElementById('oneHotCanvas');
+  const out = document.getElementById('oneHotOut');
+  if (!sel || !cv) return;
+  const ctx = cv.getContext('2d');
+
+  VOCAB.forEach((c, i) => {
+    const o = document.createElement('option');
+    o.value = i;
+    o.textContent = c === 'BOS' ? 'BOS (start marker)' : "'" + c + "'";
+    sel.appendChild(o);
+  });
+  sel.value = 3; // 'c'
+
+  function draw() {
+    const hot = parseInt(sel.value, 10);
+    const n = VOCAB.length;        // 27
+    const cellW = cv.width / n;
+    const top = 18, h = 40;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    for (let i = 0; i < n; i++) {
+      const x = i * cellW;
+      const on = i === hot;
+      ctx.fillStyle = on ? '#4361ee' : '#eef0f5';
+      ctx.fillRect(x + 1, top, cellW - 2, h);
+      ctx.fillStyle = on ? '#fff' : '#333';
+      ctx.font = 'bold 13px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(on ? '1' : '0', x + cellW / 2, top + h / 2 + 5);
+      // slot label
+      ctx.fillStyle = '#999';
+      ctx.font = '9px monospace';
+      const lab = VOCAB[i] === 'BOS' ? 'B' : VOCAB[i];
+      ctx.fillText(lab, x + cellW / 2, top + h + 14);
+    }
+    ctx.fillStyle = '#555';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('slot 0', 2, 12);
+    ctx.textAlign = 'right';
+    ctx.fillText('slot 26', cv.width - 2, 12);
+
+    const ch = VOCAB[hot] === 'BOS' ? 'BOS' : "'" + VOCAB[hot] + "'";
+    const arr = Array.from({ length: n }, (_, i) => (i === hot ? 1 : 0));
+    out.textContent = ch + ' (token id ' + hot + ')  →  [' + arr.join(', ') + ']';
+  }
+  sel.addEventListener('change', draw);
+  draw();
+})();
+
+// ─────────────────────────────────────────────────────────
+// DEMO 2 — 2D embedding space (hand-placed for intuition)
+// ─────────────────────────────────────────────────────────
+(function () {
+  const cv = document.getElementById('spaceCanvas');
+  const out = document.getElementById('spaceOut');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+
+  // Hand-tuned coords in 0..1 space. Vowels cluster top-left;
+  // some phonetically related consonants are placed near each other.
+  const pos = {
+    a:[0.18,0.22], e:[0.26,0.15], i:[0.12,0.30], o:[0.30,0.28], u:[0.20,0.36], y:[0.34,0.40],
+    b:[0.62,0.70], p:[0.70,0.74],            // bilabial plosives
+    c:[0.78,0.30], k:[0.84,0.36], q:[0.88,0.24], // back consonants
+    d:[0.55,0.55], t:[0.63,0.50],            // alveolar plosives
+    f:[0.74,0.58], v:[0.80,0.62],            // labiodental fricatives
+    g:[0.90,0.50], j:[0.84,0.78],
+    h:[0.46,0.18],
+    l:[0.40,0.62], r:[0.48,0.70],            // liquids
+    m:[0.50,0.84], n:[0.58,0.86],            // nasals
+    s:[0.70,0.40], z:[0.78,0.46],            // sibilants
+    w:[0.40,0.50], x:[0.92,0.66]
+  };
+  const vowels = new Set(['a','e','i','o','u','y']);
+  const letters = Object.keys(pos);
+
+  const PAD = 36;
+  function sx(x) { return PAD + x * (cv.width - 2 * PAD); }
+  function sy(y) { return PAD + y * (cv.height - 2 * PAD); }
+
+  let hover = null;
+  const selected = [];
+
+  function dist(a, b) {
+    const dx = pos[a][0] - pos[b][0], dy = pos[a][1] - pos[b][1];
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    // faint grid
+    ctx.strokeStyle = '#f0f0f0';
+    ctx.lineWidth = 1;
+    for (let g = 0; g <= 10; g++) {
+      ctx.beginPath(); ctx.moveTo(sx(g/10), sy(0)); ctx.lineTo(sx(g/10), sy(1)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sx(0), sy(g/10)); ctx.lineTo(sx(1), sy(g/10)); ctx.stroke();
+    }
+    // line between two selected
+    if (selected.length === 2) {
+      const [a, b] = selected;
+      ctx.strokeStyle = '#e67e22';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(sx(pos[a][0]), sy(pos[a][1]));
+      ctx.lineTo(sx(pos[b][0]), sy(pos[b][1]));
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    // dots
+    letters.forEach(ch => {
+      const x = sx(pos[ch][0]), y = sy(pos[ch][1]);
+      const isSel = selected.includes(ch);
+      const isHov = hover === ch;
+      ctx.beginPath();
+      ctx.arc(x, y, isHov || isSel ? 13 : 10, 0, Math.PI * 2);
+      ctx.fillStyle = isSel ? '#e67e22' : (vowels.has(ch) ? '#9b59b6' : '#4361ee');
+      ctx.fill();
+      if (isHov) { ctx.strokeStyle = '#1a1a2e'; ctx.lineWidth = 2; ctx.stroke(); }
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 12px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(ch, x, y + 4);
+    });
+    // legend
+    ctx.textAlign = 'left';
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#9b59b6'; ctx.fillText('● vowels', 10, cv.height - 12);
+    ctx.fillStyle = '#4361ee'; ctx.fillText('● consonants', 90, cv.height - 12);
+  }
+
+  function pick(mx, my) {
+    let best = null, bd = 18;
+    letters.forEach(ch => {
+      const d = Math.hypot(sx(pos[ch][0]) - mx, sy(pos[ch][1]) - my);
+      if (d < bd) { bd = d; best = ch; }
+    });
+    return best;
+  }
+
+  cv.addEventListener('mousemove', e => {
+    const r = cv.getBoundingClientRect();
+    const h = pick(e.clientX - r.left, e.clientY - r.top);
+    if (h !== hover) {
+      hover = h;
+      draw();
+      if (selected.length < 2) {
+        out.textContent = hover
+          ? "Letter '" + hover + "'" + (vowels.has(hover) ? '  (a vowel)' : '')
+          : 'Hover over a dot, or click two of them.';
+      }
+    }
+  });
+
+  cv.addEventListener('click', e => {
+    const r = cv.getBoundingClientRect();
+    const h = pick(e.clientX - r.left, e.clientY - r.top);
+    if (!h) return;
+    if (selected.length === 2) selected.length = 0;
+    if (!selected.includes(h)) selected.push(h);
+    draw();
+    if (selected.length === 2) {
+      const [a, b] = selected;
+      const d = dist(a, b);
+      const near = d < 0.25 ? 'close — the model would treat them similarly'
+                 : d < 0.5 ? 'a medium distance apart'
+                 : 'far apart — quite different roles';
+      out.textContent = "Distance between '" + a + "' and '" + b + "' = " +
+        d.toFixed(3) + '  (' + near + ')';
+    } else if (selected.length === 1) {
+      out.textContent = "Selected '" + selected[0] + "'. Now click a second letter.";
+    }
+  });
+
+  draw();
+})();
+
+// ─────────────────────────────────────────────────────────
+// DEMO 3 — token + position = final
+// ─────────────────────────────────────────────────────────
+(function () {
+  const selC = document.getElementById('addChar');
+  const selP = document.getElementById('addPos');
+  const cv = document.getElementById('addCanvas');
+  if (!selC || !cv) return;
+  const ctx = cv.getContext('2d');
+  const NE = 16;
+
+  // Build a stable fake "trained" wte (27×16) and wpe (16×16)
+  const rnd = seeded(42);
+  const wte = VOCAB.map(() => Array.from({ length: NE }, () => (rnd() - 0.5) * 1.6));
+  const wpe = Array.from({ length: 16 }, () => Array.from({ length: NE }, () => (rnd() - 0.5) * 0.9));
+
+  VOCAB.forEach((c, i) => {
+    const o = document.createElement('option');
+    o.value = i;
+    o.textContent = c === 'BOS' ? 'BOS' : "'" + c + "'";
+    selC.appendChild(o);
+  });
+  selC.value = 3;
+  for (let p = 0; p < 16; p++) {
+    const o = document.createElement('option');
+    o.value = p; o.textContent = 'position ' + p;
+    selP.appendChild(o);
+  }
+  selP.value = 0;
+
+  function bars(rowY, vec, color, label) {
+    const n = vec.length;
+    const w = (cv.width - 90) / n;
+    const mid = rowY;
+    const scale = 36;
+    ctx.fillStyle = '#333';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(label, 4, rowY - 44);
+    // zero line
+    ctx.strokeStyle = '#ddd';
+    ctx.beginPath(); ctx.moveTo(85, mid); ctx.lineTo(cv.width, mid); ctx.stroke();
+    for (let i = 0; i < n; i++) {
+      const x = 90 + i * w;
+      const v = Math.max(-1, Math.min(1, vec[i]));
+      const bh = v * scale;
+      ctx.fillStyle = color;
+      ctx.fillRect(x, mid - Math.max(bh, 0), w - 2, Math.abs(bh));
+    }
+  }
+
+  function draw() {
+    const ci = parseInt(selC.value, 10);
+    const pi = parseInt(selP.value, 10);
+    const tok = wte[ci];
+    const posv = wpe[pi];
+    const sum = tok.map((v, i) => v + posv[i]);
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    bars(70, tok, '#4361ee', 'token embedding  (wte[' + ci + '])');
+    bars(150, posv, '#9b59b6', 'position embedding  (wpe[' + pi + '])');
+    bars(250, sum, '#2ecc71', 'final = token + position');
+  }
+  selC.addEventListener('change', draw);
+  selP.addEventListener('change', draw);
+  draw();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>What is a GPT? — MicroGPT Course</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  /* Small local helpers used only on this page */
+  .pipeline {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin: 24px 0;
+  }
+  .pipeline .stage {
+    padding: 16px 22px;
+    border-radius: var(--radius);
+    font-weight: 600;
+    text-align: center;
+    box-shadow: var(--shadow);
+    min-width: 120px;
+  }
+  .pipeline .in  { background: #e8f4fd; border: 2px solid var(--blue); }
+  .pipeline .mod { background: #efe8fd; border: 2px solid var(--purple); }
+  .pipeline .out { background: #e8fde8; border: 2px solid var(--green); }
+  .pipeline .arrow { font-size: 1.6em; color: #999; }
+  .pipeline small { display: block; font-weight: 400; color: #666; font-size: .72em; margin-top: 4px; }
+
+  .loop-list { counter-reset: step; list-style: none; margin-left: 0; }
+  .loop-list li {
+    position: relative;
+    padding: 10px 14px 10px 52px;
+    margin-bottom: 10px;
+    background: #fff;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+  .loop-list li::before {
+    counter-increment: step;
+    content: counter(step);
+    position: absolute;
+    left: 12px; top: 50%;
+    transform: translateY(-50%);
+    width: 28px; height: 28px;
+    line-height: 28px;
+    text-align: center;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    font-size: .85em;
+  }
+
+  .terminal {
+    background: #1e1e2e;
+    color: #cdd6f4;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: .85em;
+    padding: 18px 20px;
+    border-radius: var(--radius);
+    line-height: 1.5;
+    overflow-x: auto;
+    margin: 16px 0 24px;
+    box-shadow: var(--shadow);
+  }
+  .terminal .dim { color: #6c7086; }
+  .terminal .good { color: #a6e3a1; }
+  .terminal .hi { color: #f9e2af; }
+
+  .vocab-grid { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 24px; }
+  .vocab-grid span {
+    display: inline-block;
+    width: 34px; height: 34px;
+    line-height: 34px;
+    text-align: center;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-family: monospace;
+    font-weight: 600;
+    box-shadow: var(--shadow);
+  }
+  .vocab-grid span.bos { background: var(--accent); color: #fff; border-color: var(--accent2); width: auto; padding: 0 10px; }
+
+  .blanks b {
+    display: inline-block;
+    border-bottom: 3px solid var(--accent);
+    min-width: 46px;
+    text-align: center;
+    color: var(--accent2);
+  }
+</style>
+</head>
+<body>
+<button id="hamburger">&#9776;</button>
+<nav id="sidebar"></nav>
+<div class="progress-bar"><div class="fill"></div></div>
+<main id="content">
+
+  <h1>What is a GPT?</h1>
+  <p class="subtitle">
+    <span class="difficulty beginner">Beginner</span>
+    The big picture — no math, no code. Just the core idea, explained the way you'd explain it to a friend.
+  </p>
+
+  <p>
+    You've heard "GPT" a thousand times. ChatGPT, GPT-4, "a GPT model." But what
+    <em>is</em> it, really? Strip away the hype and the marketing, and a GPT is
+    something a programmer can fully understand. By the end of this page you'll
+    know what the three letters mean, what the thing actually <em>does</em>, and
+    why our 300-line Java program is the same idea as ChatGPT — just smaller.
+  </p>
+
+  <div class="box info">
+    <strong>The one-sentence version</strong>
+    A GPT is a program that, given some text, guesses what comes next — and it
+    learned how to guess by reading a huge amount of text and correcting itself
+    millions of times.
+  </div>
+
+  <h2>Breaking down the name: G-P-T</h2>
+
+  <p>"GPT" stands for <strong>Generative Pre-trained Transformer</strong>. Three
+  words, three ideas. Let's take them one at a time, right to left actually
+  makes the most sense — but we'll go in order.</p>
+
+  <h3>G is for <span style="color:var(--green)">Generative</span></h3>
+  <p>
+    It <em>generates</em> — it produces new text, one piece at a time. It doesn't
+    pick an answer from a fixed list, and it doesn't look things up in a database.
+    It builds its output from scratch, character by character (in our tiny model)
+    or word-fragment by word-fragment (in ChatGPT). "Generative" is the opposite
+    of "retrieval." A search engine retrieves existing pages; a GPT generates
+    something that didn't exist before.
+  </p>
+
+  <h3>P is for <span style="color:var(--orange)">Pre-trained</span></h3>
+  <p>
+    Before you ever use it, the model has already been <em>trained</em> — it spent
+    a long time studying examples and adjusting itself to get good at guessing.
+    The "pre" means that learning happened <em>ahead of time</em>. When you run our
+    Java program, it does this training first (takes a few minutes), and only then
+    starts generating. ChatGPT was pre-trained once, for months, on thousands of
+    machines — and now millions of people use that finished, frozen model.
+  </p>
+
+  <h3>T is for <span style="color:var(--purple)">Transformer</span></h3>
+  <p>
+    "Transformer" is the name of the specific <em>design</em> inside — the
+    particular arrangement of math that does the guessing. It was introduced in a
+    2017 research paper famously titled "Attention Is All You Need." You don't need
+    to know how it works yet (that's chapters 6–8). For now: Transformer is just
+    the brand of engine under the hood. There are other designs, but the
+    Transformer is the one that won.
+  </p>
+
+  <div class="box tip">
+    <strong>Mental shortcut</strong>
+    <strong style="display:inline">Generative</strong> = makes new text ·
+    <strong style="display:inline">Pre-trained</strong> = already learned from
+    examples · <strong style="display:inline">Transformer</strong> = the engine
+    design that does it.
+  </div>
+
+  <h2>The autocomplete analogy</h2>
+
+  <p>
+    You already use a baby version of a GPT every day. When you type on your phone
+    and it suggests the next word above the keyboard — that's the same fundamental
+    idea. You type "I'll be there in five", and the phone offers "minutes."
+  </p>
+
+  <p>
+    A GPT is that, cranked up enormously. Your phone's autocomplete looks at the
+    last word or two and offers a small handful of guesses. A GPT looks at
+    <em>everything</em> you've written so far — a whole paragraph, a whole
+    conversation, an entire document — and produces a far more sophisticated guess
+    about what should come next. Same job. Vastly more capable.
+  </p>
+
+  <div class="box tip">
+    <strong>Real-life analogy</strong>
+    Next-token prediction is just autocomplete on your phone. When you type
+    "See you tom", your phone suggests "tomorrow" — it learned from millions of
+    texts that "tomorrow" usually follows "tom" in that context. A GPT does
+    exactly the same thing, only much better and for every possible context, not
+    just the last word or two.
+  </div>
+
+  <div class="box info">
+    <strong>Why "just guessing the next word" is secretly powerful</strong>
+    To correctly guess the next word in "The capital of France is ___", you have
+    to <em>know</em> the capital of France. To finish "2 + 2 = ___" you have to do
+    arithmetic. To continue a story sensibly you have to track characters and plot.
+    "Predict the next token" sounds trivial, but doing it <em>well</em> forces the
+    model to absorb a huge amount about the world. That's the trick the whole field
+    is built on.
+  </p>
+
+  <h2>"Next token prediction" — the actual job</h2>
+
+  <p>
+    The technical name for what a GPT does is <strong>next token prediction</strong>.
+    Let's make that concrete. Suppose the model has read:
+  </p>
+
+  <p class="blanks" style="font-size:1.3em; text-align:center;">
+    "The cat sat on the <b>?</b>"
+  </p>
+
+  <p>
+    A trained model doesn't return a single answer. It returns a <em>ranked list of
+    possibilities with confidence scores</em>, something like:
+  </p>
+
+  <table>
+    <thead><tr><th>Next word guess</th><th>Model's confidence</th></tr></thead>
+    <tbody>
+      <tr><td>mat</td><td>61%</td></tr>
+      <tr><td>floor</td><td>14%</td></tr>
+      <tr><td>roof</td><td>9%</td></tr>
+      <tr><td>chair</td><td>5%</td></tr>
+      <tr><td>...everything else...</td><td>11%</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Then it picks one (usually a likely one, but with a dash of randomness so it's
+    not robotic), <em>appends it to the text</em>, and repeats the whole process to
+    get the word after that. Guess, append, guess, append. That loop — run over and
+    over — is how a GPT writes a paragraph, an email, or a name.
+  </p>
+
+  <div class="box tip">
+    <strong>Notice the loop</strong>
+    The model only ever predicts <em>one</em> step ahead. Long, coherent text comes
+    from doing that one small step thousands of times, each time feeding its own
+    last guess back in as part of the input.
+  </div>
+
+  <div class="box tip">
+    <strong>Concrete example</strong>
+    <p><strong>Input:</strong> the three letters <code>emm</code> (the model has read this
+    far into a name).</p>
+    <p><strong>Output:</strong> a probability for each of the 27 tokens, e.g.
+    <code>{a: 0.72, y: 0.08, e: 0.05, i: 0.04, &hellip;, BOS: 0.01}</code></p>
+    <p><strong>Meaning:</strong> the model is 72% confident the next character is
+    <code>a</code> — because <code>emma</code> is by far the most common name in the data
+    that starts with <code>emm</code>. Pick <code>a</code>, append it, and the input
+    becomes <code>emma</code>; predict again and <code>BOS</code> (end-of-name) now wins,
+    so the name stops.</p>
+  </div>
+
+  <div class="box info">
+    <strong>But why predict the next token? Why not the whole word or sentence at once?</strong>
+    Because predicting one small piece at a time is <em>far</em> simpler — there's
+    only one decision to make, over a tiny set of choices (27 for us). Predicting a
+    whole word or sentence in one shot would mean choosing from billions of
+    possibilities at once. And you lose nothing: since you feed each guess back in
+    and predict again, chaining these one-step predictions lets you generate text of
+    <em>any</em> length. One simple, repeatable step beats one giant, impossible one.
+  </div>
+
+  <h2>What is a "token"?</h2>
+
+  <p>
+    I've been saying "word," but that's a simplification. The real unit a GPT works
+    with is called a <strong>token</strong>. A token is just "one chunk of text" —
+    the smallest piece the model reads and writes at a time. <em>What counts as a
+    chunk is a design choice.</em>
+  </p>
+
+  <ul>
+    <li>In ChatGPT, a token is roughly a word-fragment ("transform" + "er", or "ing").</li>
+    <li>In <strong>our tiny Java GPT, a token is a single character.</strong> One letter at a time.</li>
+  </ul>
+
+  <p>
+    Why characters? Because our model learns to generate <em>human names</em>, and
+    names are short. Working one letter at a time keeps everything small and
+    understandable. The complete set of tokens the model knows is called its
+    <strong>vocabulary</strong>. Our vocabulary is tiny: the 26 lowercase letters,
+    plus one special token.
+  </p>
+
+  <div class="box info">
+    <strong>But why characters instead of words?</strong>
+    It's a tradeoff. Real GPTs use "subwords" — pieces of words — which makes them
+    faster (fewer steps per sentence) and lets them carry meaning in each token.
+    Characters are the <em>simpler</em> choice: the vocabulary stays tiny (27 instead
+    of 100,000+), and you never have to decide where to split a word. The cost is
+    that the model has to learn spelling completely from scratch, letter by letter.
+    For a toy that generates short names, that's a fine price to pay for
+    simplicity you can see.
+  </div>
+
+  <div class="vocab-grid">
+    <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span>
+    <span>g</span><span>h</span><span>i</span><span>j</span><span>k</span><span>l</span>
+    <span>m</span><span>n</span><span>o</span><span>p</span><span>q</span><span>r</span>
+    <span>s</span><span>t</span><span>u</span><span>v</span><span>w</span><span>x</span>
+    <span>y</span><span>z</span><span class="bos">BOS</span>
+  </div>
+
+  <p>
+    That's <strong>27 tokens</strong> total. The odd one out is <code>BOS</code>,
+    which stands for <em>Beginning Of Sequence</em>. It's a marker the model uses to
+    say "a name starts here" and "a name ends here" — like a bookend. It's not a
+    letter you'd ever print; it's punctuation for the machine. When the model
+    generates a <code>BOS</code>, that's its way of saying "the name is finished."
+  </p>
+
+  <div class="box info">
+    <strong>Key takeaway</strong>
+    The model never sees letters. Internally, each token is just a <em>number</em>:
+    <code>a</code>&rarr;0, <code>b</code>&rarr;1, … <code>z</code>&rarr;25,
+    <code>BOS</code>&rarr;26. Everything a GPT does is arithmetic on numbers. We'll
+    spend the next two chapters on exactly how text becomes numbers.
+  </div>
+
+  <h2>What is "the model," physically?</h2>
+
+  <p>
+    Here's the part that surprises most programmers. You might imagine the model is
+    a clever algorithm — pages of branching logic, rules, if-statements. It isn't.
+    <strong>The model is just a big pile of numbers.</strong>
+  </p>
+
+  <p>
+    These numbers are called <strong>parameters</strong> (you'll also hear
+    "weights"). They start out completely random — pure noise. Training is the
+    process of nudging every one of those numbers, slightly, again and again, until
+    the pile as a whole produces good guesses. The "intelligence" of the model lives
+    entirely in the specific values of these numbers. Change the numbers, change the
+    behavior. That's the whole machine.
+  </p>
+
+  <div class="pipeline">
+    <div class="stage in">Input<small>some tokens</small></div>
+    <div class="arrow">&rarr;</div>
+    <div class="stage mod">The Model<small>4,192 numbers<br>doing arithmetic</small></div>
+    <div class="arrow">&rarr;</div>
+    <div class="stage out">Output<small>guess for the<br>next token</small></div>
+  </div>
+
+  <p>
+    How big is our pile? <strong>Exactly 4,192 numbers.</strong> That's it. A
+    spreadsheet could hold them. For comparison, GPT-4 has roughly
+    <strong>1.8 trillion</strong> — about 400 million times more. But — and this is
+    the entire point of this course — <em>the recipe is identical</em>. Same kind of
+    numbers, same kind of arithmetic, same training idea. Only the scale differs.
+  </p>
+
+  <div class="box info">
+    <strong>But why only 4,192 parameters? Is that enough to learn anything?</strong>
+    It's roughly the smallest pile that can still learn something useful — small
+    enough to fit in a spreadsheet, yet enough to capture the patterns of short
+    names. So why does GPT-4 have ~1.8 trillion? Because more parameters means more
+    room to store patterns: more spellings, more grammar, more facts, more of the
+    world. Our 4,192 numbers can learn "names tend to end in vowels"; you need
+    billions to learn "the capital of France is Paris." The <em>algorithm</em> is
+    identical at both sizes — capacity is the only thing that grows.
+  </div>
+
+  <table>
+    <thead><tr><th></th><th>Our MicroGPT</th><th>GPT-4</th></tr></thead>
+    <tbody>
+      <tr><td>Parameters (the pile of numbers)</td><td>4,192</td><td>~1,800,000,000,000</td></tr>
+      <tr><td>One token is…</td><td>a single character</td><td>a word-fragment</td></tr>
+      <tr><td>Trained on</td><td>32,000 names</td><td>much of the internet</td></tr>
+      <tr><td>Training time</td><td>a few minutes, one laptop</td><td>months, thousands of GPUs</td></tr>
+      <tr><td>Learns to produce</td><td>new names</td><td>human language</td></tr>
+    </tbody>
+  </table>
+
+  <h2>The training loop, in plain English</h2>
+
+  <p>
+    So how does a pile of random numbers <em>become</em> a pile of good numbers?
+    Through a loop. Here is the entire learning process with no math whatsoever:
+  </p>
+
+  <ol class="loop-list">
+    <li><strong>Show it a real example.</strong> Take a real name from the dataset,
+        say <code>emma</code>, and reveal it one letter at a time.</li>
+    <li><strong>Let it guess.</strong> After the letters <code>em</code>, ask the
+        model: what's the next letter? It produces its ranked guesses.</li>
+    <li><strong>Check the answer.</strong> We know the real next letter is
+        <code>m</code>. How much confidence did the model put on <code>m</code>? If
+        it was confident, good. If it guessed <code>z</code>, bad.</li>
+    <li><strong>Measure the wrongness.</strong> Turn "how bad was that guess" into a
+        single number called the <strong>loss</strong>. High loss = very wrong.
+        Low loss = nearly right.</li>
+    <li><strong>Nudge the numbers.</strong> Adjust all 4,192 parameters a tiny bit
+        in the direction that would have made the correct letter more likely next
+        time. (The mechanism for figuring out <em>which</em> direction is the magic
+        of chapters 5 and 9 — for now, trust that it can.)</li>
+    <li><strong>Repeat — a thousand times.</strong> New example, guess, check, nudge.
+        Over and over. Each nudge is microscopic, but a thousand of them add up to a
+        model that has genuinely learned the patterns of names.</li>
+  </ol>
+
+  <div class="box warn">
+    <strong>This is the whole secret</strong>
+    There is no hand-written rule like "names often end in a vowel." Nobody
+    programs that in. The model <em>discovers</em> such patterns on its own, purely
+    by being corrected toward real examples thousands of times. Learning = repeated
+    correction. That's it. That's what "training" means.
+  </div>
+
+  <h2>Watching it actually learn</h2>
+
+  <p>
+    This isn't hypothetical — it's our real Java program. When you run it, the first
+    thing you see is the <strong>loss going down</strong> as training proceeds. A
+    falling loss means "the model's guesses are getting less wrong." Here's
+    abbreviated real output:
+  </p>
+
+  <div class="terminal">
+<span class="dim">num docs: 32033</span>
+<span class="dim">vocab size: 27</span>
+<span class="dim">num params: 4192</span>
+step    1/1000 | loss <span class="hi">3.4011</span>   <span class="dim">&larr; random guessing, very wrong</span>
+step  100/1000 | loss 2.6420
+step  300/1000 | loss 2.4115
+step  600/1000 | loss 2.2837
+step 1000/1000 | loss <span class="good">2.1903</span>   <span class="dim">&larr; much better</span>
+  </div>
+
+  <p>
+    Notice the loss starts around <strong>3.4</strong> and drops to about
+    <strong>2.2</strong>. That fall is the learning. At step 1, the numbers are
+    random and the model is basically guessing letters blindly. By step 1000, it has
+    been nudged a thousand times and its guesses now reflect the real shape of human
+    names.
+  </p>
+
+  <div class="box info">
+    <strong>But why does the loss actually go down?</strong>
+    Because every single training step adjusts those 4,192 numbers in the exact
+    direction that makes the <em>correct</em> next letter a little more likely. Loss
+    is just "how wrong was the guess," so making the right answer more likely makes
+    the loss smaller — by construction. Do that a thousand times and the tiny
+    improvements compound: the model slides from random guessing (loss ~3.4) to
+    having genuinely absorbed the patterns in English names (loss ~2.2). A falling
+    loss isn't magic; it's the visible trace of a thousand small corrections.
+  </div>
+
+  <div class="box tip">
+    <strong>Concrete example</strong>
+    <p>What the loss number actually means, step by step:</p>
+    <p><strong>Step 1 — loss &asymp; 3.30:</strong> pure random guessing. With 27
+    equally-likely tokens the loss is <code>&minus;log(1/27) &asymp; 3.30</code>. (Our real
+    run starts a touch higher, ~3.4, because the random weights aren't even perfectly
+    even.)</p>
+    <p><strong>Step ~300 — loss &asymp; 2.4:</strong> better than random. The model has
+    learned that some letters are simply more common than others — lots of names use
+    <code>a</code>, <code>e</code>, <code>n</code>; almost none use <code>q</code>.</p>
+    <p><strong>Step 1000 — loss &asymp; 2.2:</strong> it has absorbed real letter-to-letter
+    patterns — which letters tend to follow which, where names like to end. Each 0.1 drop
+    in loss is the model becoming measurably less surprised by real names.</p>
+  </div>
+
+  <p>
+    Then comes the fun part. With training done, we ask the model to
+    <em>generate</em> — start from <code>BOS</code> and keep guessing the next letter
+    until it produces a <code>BOS</code> to end the name. These are brand-new names
+    the model invented; none of them are copied from the training data:
+  </p>
+
+  <div class="terminal">
+<span class="dim">--- inference (new, hallucinated names) ---</span>
+sample  1: <span class="good">shade</span>
+sample  2: <span class="good">jara</span>
+sample  3: <span class="good">amara</span>
+sample  4: <span class="good">kayven</span>
+sample  5: <span class="good">marlon</span>
+<span class="dim">...</span>
+  </div>
+
+  <p>
+    Look at those. <code>shade</code>, <code>jara</code>, <code>amara</code> — they
+    <em>feel</em> like names. They're pronounceable, they have name-like rhythm, they
+    end in plausible ways. The model was never told a single rule about how names
+    work. It absorbed all of it from being corrected toward 32,000 examples. A pile
+    of 4,192 numbers, nudged into shape, now dreams up names.
+  </p>
+
+  <div class="box info">
+    <strong>The same thing ChatGPT does</strong>
+    When ChatGPT writes you a paragraph, it's running this identical loop at
+    inference time: look at everything so far, guess the next token, append it,
+    repeat. The only differences are scale (trillions of numbers instead of
+    thousands) and vocabulary (word-fragments instead of letters). If you understand
+    the name generator, you understand the shape of the whole thing.
+  </div>
+
+  <h2>Where we go from here</h2>
+
+  <p>
+    We've made two big promises that we haven't paid off yet, and the rest of the
+    course pays them off:
+  </p>
+
+  <ul>
+    <li><strong>"Text becomes numbers."</strong> How exactly? That's
+        <em>vectors</em> (Chapter 2) and <em>embeddings</em> (Chapter 3).</li>
+    <li><strong>"We nudge the numbers in the right direction."</strong> How does the
+        program know which direction? That's <em>gradients</em> and
+        <em>automatic differentiation</em> (Chapters 4–5, 9).</li>
+  </ul>
+
+  <p>
+    Everything starts with the most basic building block of all — a list of numbers
+    called a vector. That's next, and it comes with demos you can drag around.
+  </p>
+
+  <div class="box tip">
+    <strong>Before you move on</strong>
+    Make sure these four ideas feel solid: (1) a GPT <em>generates</em> text by
+    predicting one token at a time; (2) a <em>token</em> is one chunk of text — a
+    character, for us; (3) the <em>model</em> is just a pile of numbers
+    (parameters); (4) <em>training</em> means correcting those numbers toward real
+    examples, over and over. If those click, you're ready for the math — and it'll
+    be gentler than you expect.
+  </div>
+
+  <div class="page-nav"></div>
+</main>
+<script src="../js/nav.js"></script>
+<script src="../js/highlight.js"></script>
+</body>
+</html>

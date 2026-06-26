@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glossary — MicroGPT Course</title>
+<link rel="stylesheet" href="./css/style.css">
+<style>
+  .glossary-item strong { font-size: 1.02em; }
+  .glossary-item .ref { display:inline-block; margin-left:8px; font-size:.72em; font-weight:600;
+    background:#eef1ff; color:var(--accent2); padding:1px 8px; border-radius:20px;
+    text-decoration:none; vertical-align:middle; }
+  .glossary-item .ref:hover { background:#e0e6ff; }
+  .gloss-intro { margin-bottom: 22px; }
+</style>
+</head>
+<body>
+<button id="hamburger">&#9776;</button>
+<nav id="sidebar"></nav>
+<div class="progress-bar"><div class="fill"></div></div>
+<main id="content">
+
+  <h1>Glossary</h1>
+  <p class="subtitle">
+    <span class="difficulty beginner">Reference</span>
+    Every term used in the course, in plain language, with a link to the chapter that explains it
+    in full.
+  </p>
+
+  <p class="gloss-intro">
+    Jargon is the biggest barrier to understanding this stuff — not the ideas themselves. Each entry
+    below is written for someone who knows how to program but has never touched the math or the
+    machine-learning vocabulary. Tap a chapter chip to jump to the deep dive.
+  </p>
+
+  <div class="glossary-grid">
+    <div class="glossary-item">
+      <strong>Activation function</strong> <a class="ref" href="chapters/06-neural-networks.html">Ch06</a>
+      <p>A simple function applied to a neuron's output to introduce non-linearity, so the network can learn curved/complex patterns rather than only straight-line relationships. Ours uses <b>ReLU</b>.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Adam optimizer</strong> <a class="ref" href="chapters/09-training.html">Ch09</a>
+      <p>The update rule that adjusts parameters during training. It improves on plain gradient descent by keeping a running average of each parameter's gradient (<i>momentum</i>) and of its squared gradient (to size each step adaptively).</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Attention / Self-attention</strong> <a class="ref" href="chapters/07-attention.html">Ch07</a>
+      <p>The mechanism that lets each token look at other tokens and pull in information from them, weighted by relevance. &ldquo;Self&rdquo; means a sequence attends to itself. It's how the model uses context.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Autograd / Automatic differentiation</strong> <a class="ref" href="chapters/05-autograd.html">Ch05</a>
+      <p>A technique that automatically computes gradients (derivatives) of a result with respect to every input, by recording each arithmetic operation. Our <code>Value</code> record is a tiny autograd engine.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Backpropagation</strong> <a class="ref" href="chapters/09-training.html">Ch09</a>
+      <p>Running the chain rule backwards through the computation graph to fill in every parameter's gradient. Triggered by one call to <code>loss.backward()</code>.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Batch / Mini-batch</strong>
+      <p>A group of training examples processed together before updating parameters. Larger batches give steadier gradients. Our minimal version uses one name per step (a batch of one).</p>
+    </div>
+    <div class="glossary-item">
+      <strong>BOS (Beginning of Sequence)</strong> <a class="ref" href="chapters/01-what-is-gpt.html">Ch01</a>
+      <p>A special token (id 26 in our model) that marks where a name starts and ends — a bookend for the machine. When the model generates a BOS, it's signalling &ldquo;the name is finished.&rdquo;</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Causal attention / Causal mask</strong> <a class="ref" href="chapters/07-attention.html">Ch07</a>
+      <p>A rule that each position may attend only to earlier positions and itself, never the future. It's what lets the model predict the next token without cheating by peeking ahead. Our code enforces it naturally by only caching keys/values up to the current position.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Chain rule</strong> <a class="ref" href="chapters/05-autograd.html">Ch05</a>
+      <p>The calculus rule for differentiating nested functions: multiply the local derivatives along the chain. It's the mathematical backbone of backpropagation.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Computation graph</strong> <a class="ref" href="chapters/05-autograd.html">Ch05</a>
+      <p>The network of operations linking inputs to a final result, recorded as each operation runs. Walking it backwards yields the gradients. Built automatically by our <code>Value</code> operations.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Cross-entropy loss</strong> <a class="ref" href="chapters/09-training.html">Ch09</a>
+      <p>The loss used here: &minus;log(probability the model gave the correct token). Zero when perfectly confident and right; large when confidently wrong. Drives all the learning.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Derivative / Gradient</strong> <a class="ref" href="chapters/05-autograd.html">Ch05</a>
+      <p>A derivative measures how fast one quantity changes as another wiggles. A <b>gradient</b> is the collection of such slopes for all parameters — it points uphill on the loss, so training steps the opposite way.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Dimensionality reduction</strong> <a class="ref" href="chapters/02-vectors.html">Ch02</a>
+      <p>Squeezing high-dimensional data down to a few dimensions (e.g. 2) so it can be visualised or simplified, while preserving as much structure as possible. <b>PCA</b> is one method.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Dot product</strong> <a class="ref" href="chapters/02-vectors.html">Ch02</a>
+      <p>Multiply two vectors element-by-element and sum the results, giving a single number that measures how aligned they are. The basic operation inside <code>linear()</code> and attention scoring.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Embedding</strong> <a class="ref" href="chapters/03-embeddings.html">Ch03</a>
+      <p>A learned vector of numbers that represents a token. Similar tokens end up with similar vectors. Our <code>wte</code> table holds one 16-number embedding per character.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Epoch</strong>
+      <p>One full pass over the entire training dataset. With 32,033 names and 1,000 steps of one name each, our run doesn't even finish a single epoch — yet it still learns.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>exp() / Exponential function</strong> <a class="ref" href="chapters/04-math-basics.html">Ch04</a>
+      <p><i>e</i> raised to a power. It turns any number into a positive one and grows very fast. Softmax uses it to convert scores into positive quantities before normalising.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Forward pass</strong>
+      <p>Running input through the model to produce an output (the logits/prediction), building the computation graph along the way. The opposite direction from backpropagation. In our code, the <code>gpt()</code> function.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>GPT (Generative Pre-trained Transformer)</strong> <a class="ref" href="chapters/01-what-is-gpt.html">Ch01</a>
+      <p>A model that generates text one token at a time, was trained ahead of time on lots of examples, and uses the Transformer architecture. ChatGPT and our 4,192-number name generator are the same idea at different scales.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Gradient descent</strong> <a class="ref" href="chapters/09-training.html">Ch09</a>
+      <p>The core learning method: nudge each parameter a small step <i>opposite</i> to its gradient to reduce the loss, and repeat. Like rolling a marble downhill.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Head (attention head)</strong> <a class="ref" href="chapters/07-attention.html">Ch07</a>
+      <p>One of several parallel attention computations. Each head can focus on a different kind of relationship. Ours has 4 heads, each working on 4 of the 16 embedding dimensions.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Hyperparameter</strong>
+      <p>A setting we <i>choose</i> rather than learn — e.g. number of layers, embedding size, learning rate, number of steps. Contrast with parameters, which the model learns.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Inference</strong> <a class="ref" href="chapters/01-what-is-gpt.html">Ch01</a>
+      <p>Using a trained model to produce output — here, generating new names. No learning happens during inference; the parameters are frozen.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>KV Cache</strong>
+      <p>An efficiency trick: store the key and value vectors already computed for earlier positions so they don't have to be recomputed as generation proceeds. Our <code>keys[]</code>/<code>values[]</code> lists are exactly this cache.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Layer</strong> <a class="ref" href="chapters/06-neural-networks.html">Ch06</a>
+      <p>One stage of processing in the network. A transformer layer bundles an attention block and an MLP block. Our model has a single layer (<code>nLayer = 1</code>); big models stack dozens.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Learning rate</strong> <a class="ref" href="chapters/09-training.html">Ch09</a>
+      <p>How big a step each update takes. Too small = painfully slow; too large = overshoots and diverges. Ours starts at 0.01 and decays linearly to 0.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Linear transformation</strong> <a class="ref" href="chapters/06-neural-networks.html">Ch06</a>
+      <p>Multiplying an input vector by a weight matrix to produce a new vector — a weighted mix of the inputs. In general, linear layers can include a bias term, but ours omit it for simplicity. Implemented by <code>linear()</code>; the most common operation in the model.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>log() / Logarithm</strong> <a class="ref" href="chapters/04-math-basics.html">Ch04</a>
+      <p>The inverse of exponentiation. The natural log (base <i>e</i>) of a probability between 0 and 1 is negative and dives toward &minus;&infin; near 0 — which is why &minus;log makes a clean loss.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Logits</strong> <a class="ref" href="chapters/04-math-basics.html">Ch04</a>
+      <p>The raw, unnormalised scores the model outputs for each possible next token, <i>before</i> softmax turns them into probabilities. Our model produces 27 logits per step.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Loss function</strong> <a class="ref" href="chapters/09-training.html">Ch09</a>
+      <p>A single number measuring how wrong the model's predictions are; smaller is better. Training works by pushing it down. Ours is cross-entropy loss, averaged over a name.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>MLP (Multi-Layer Perceptron)</strong> <a class="ref" href="chapters/06-neural-networks.html">Ch06</a>
+      <p>A small feed-forward network: linear &rarr; activation (ReLU) &rarr; linear. In a transformer it processes each position after attention, expanding to 4&times; width and back.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Multi-head attention</strong> <a class="ref" href="chapters/07-attention.html">Ch07</a>
+      <p>Running several attention heads in parallel and concatenating their results, so the model can attend to different things at once. Ours runs 4 heads per layer.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Next-token prediction</strong> <a class="ref" href="chapters/01-what-is-gpt.html">Ch01</a>
+      <p>The fundamental task a GPT performs: given the text so far, predict the next token. Doing this well forces the model to absorb real patterns. Our model predicts the next character.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>One-hot encoding</strong> <a class="ref" href="chapters/03-embeddings.html">Ch03</a>
+      <p>Representing a token as a vector that is all zeros except a single 1 at the token's index. Multiplying a one-hot by the embedding table simply selects that token's row — which is what an embedding lookup does.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Parameter</strong> <a class="ref" href="chapters/01-what-is-gpt.html">Ch01</a>
+      <p>One of the numbers the model learns (also called a <i>weight</i>). Our model has exactly 4,192; GPT-4 has ~1.8 trillion. The model's &ldquo;knowledge&rdquo; lives entirely in these values.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>PCA (Principal Component Analysis)</strong> <a class="ref" href="chapters/02-vectors.html">Ch02</a>
+      <p>A classic technique that finds the directions of greatest variation in data, used to reduce many dimensions down to a few for visualisation. A way to peek at high-dimensional vectors.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Position embedding</strong> <a class="ref" href="chapters/03-embeddings.html">Ch03</a>
+      <p>A learned vector added to a token's embedding to tell the model <i>where</i> in the sequence the token sits, since attention alone has no inherent sense of order. Our <code>wpe</code> table.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Probability distribution</strong> <a class="ref" href="chapters/04-math-basics.html">Ch04</a>
+      <p>A set of non-negative numbers that sum to 1, giving the chance of each outcome. The model's prediction is a distribution over the 27 possible next tokens.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Query, Key, Value</strong> <a class="ref" href="chapters/07-attention.html">Ch07</a>
+      <p>Three vectors derived from each token. A <b>query</b> asks &ldquo;what am I looking for?&rdquo;, <b>keys</b> advertise &ldquo;what I offer&rdquo;, and <b>values</b> carry the actual content. Query&middot;Key scores decide how much of each value to pull in.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>ReLU (Rectified Linear Unit)</strong> <a class="ref" href="chapters/06-neural-networks.html">Ch06</a>
+      <p>The activation function <code>max(0, x)</code>: pass positives through, clamp negatives to zero. Simple, fast, and enough to give the network non-linear power.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Residual connection</strong> <a class="ref" href="chapters/06-neural-networks.html">Ch06</a>
+      <p>Adding a block's input back onto its output (<code>x + block(x)</code>). It keeps gradients flowing and lets each block learn a small adjustment rather than a full rewrite. Wrapped around both attention and the MLP.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>RMSNorm (Root Mean Square Normalization)</strong> <a class="ref" href="chapters/06-neural-networks.html">Ch06</a>
+      <p>A normalization that rescales a vector so its root-mean-square magnitude is about 1, keeping numbers stable as they flow through layers. Implemented in <code>rmsnorm()</code>.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Softmax</strong> <a class="ref" href="chapters/04-math-basics.html">Ch04</a>
+      <p>The function that converts a list of logits into a probability distribution: exponentiate each, then divide by the sum. Used inside attention and to produce the final next-token probabilities.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Temperature</strong> <a class="ref" href="chapters/04-math-basics.html">Ch04</a>
+      <p>A knob applied during generation that divides the logits. Below 1 (ours is 0.5) it sharpens toward confident, &ldquo;safe&rdquo; picks; above 1 it flattens toward randomness and surprise.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Token / Tokenizer</strong> <a class="ref" href="chapters/01-what-is-gpt.html">Ch01</a>
+      <p>A token is the smallest chunk of text the model reads/writes — a single character in our model, a word-fragment in ChatGPT. The <b>tokenizer</b> converts text to token ids and back.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Topological sort</strong> <a class="ref" href="chapters/05-autograd.html">Ch05</a>
+      <p>An ordering of the computation graph's nodes such that every node comes after all the nodes it depends on. <code>backward()</code> reverses this order so gradients are computed in the correct sequence.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Transformer</strong> <a class="ref" href="chapters/08-transformer.html">Ch08</a>
+      <p>The neural-network architecture behind GPTs, introduced in 2017's &ldquo;Attention Is All You Need.&rdquo; It stacks attention + MLP blocks with residuals and normalization. Our <code>gpt()</code> is one transformer block.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Vector</strong> <a class="ref" href="chapters/02-vectors.html">Ch02</a>
+      <p>An ordered list of numbers — the fundamental data type of machine learning. A token's embedding is a 16-dimensional vector; everything the model does is arithmetic on vectors.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Vocabulary</strong> <a class="ref" href="chapters/01-what-is-gpt.html">Ch01</a>
+      <p>The complete set of tokens a model knows. Ours is 27: the 26 lowercase letters plus BOS. GPT-4's vocabulary is ~100,000 word-fragments.</p>
+    </div>
+    <div class="glossary-item">
+      <strong>Weight matrix</strong> <a class="ref" href="chapters/06-neural-networks.html">Ch06</a>
+      <p>A grid of parameters that transforms one vector into another via <code>linear()</code>. Each named entry in our <code>sd</code> map (e.g. <code>attn_wq</code>, <code>mlp_fc1</code>) is a weight matrix.</p>
+    </div>
+  </div>
+  <div class="page-nav"></div>
+</main>
+
+<script src="./js/nav.js"></script>
+<script src="./js/highlight.js"></script>
+</body>
+</html>

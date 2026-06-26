@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interactive Walkthrough — MicroGPT Course</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+/* ── Walkthrough-specific styles ── */
+.wt-intro { margin-bottom: 28px; }
+
+/* Pipeline indicator */
+.wt-pipeline {
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 24px; flex-wrap: wrap; justify-content: center;
+}
+.wt-pipe-phase {
+  padding: 5px 14px; border-radius: 14px;
+  font-size: .78em; font-weight: 600;
+  background: #e8e8ee; color: #888;
+  transition: all .3s; cursor: default;
+}
+.wt-pipe-phase.active { background: var(--accent); color: #fff; }
+.wt-pipe-arrow { color: #ccc; font-size: .8em; }
+
+/* Step container */
+.wt-step {
+  background: #fff; border-radius: var(--radius);
+  box-shadow: 0 2px 12px rgba(0,0,0,.08);
+  padding: 28px 28px 20px; margin-bottom: 20px;
+  transition: opacity .2s;
+}
+.wt-step-header {
+  display: flex; align-items: baseline; gap: 14px;
+  margin-bottom: 16px; flex-wrap: wrap;
+}
+.wt-step-num {
+  background: var(--accent); color: #fff;
+  width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: .85em; flex-shrink: 0;
+}
+.wt-step-title { font-size: 1.2em; font-weight: 700; color: var(--accent2); margin: 0; }
+
+/* Code block inside step */
+.wt-code {
+  background: var(--code-bg); color: var(--code-text);
+  padding: 16px 18px; border-radius: var(--radius);
+  font-family: 'SF Mono','Fira Code','Cascadia Code',monospace;
+  font-size: .82em; line-height: 1.7; overflow-x: auto;
+  margin: 0 0 16px; white-space: pre;
+}
+
+/* Description */
+.wt-desc { margin: 0 0 18px; line-height: 1.7; color: #333; }
+
+/* Variable inspector */
+.wt-vars { margin: 0 0 16px; }
+.wt-var {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: #f8f8fc; border-radius: 6px;
+  border: 1px solid #e8e8ee;
+}
+.wt-var-label {
+  font-size: .78em; font-weight: 600; color: #666;
+  margin-bottom: 6px; display: block;
+}
+.wt-var-name {
+  font-family: 'SF Mono','Fira Code',monospace;
+  font-weight: 700; color: var(--accent2); font-size: .85em;
+}
+
+/* Vector display */
+.wt-vec {
+  display: flex; flex-wrap: wrap; gap: 2px; margin-top: 4px;
+}
+.wt-vc {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 38px; height: 26px; border-radius: 3px;
+  font-size: .7em; font-family: monospace; font-weight: 500;
+  transition: transform .15s;
+}
+.wt-vc:hover { transform: scale(1.15); z-index: 1; }
+.wt-vec-op {
+  display: flex; align-items: center;
+  font-weight: 700; font-size: 1.1em; color: #999;
+  margin: 4px 0; padding-left: 4px;
+}
+.wt-vec-dim {
+  font-size: .7em; color: #aaa; margin-left: 8px;
+  align-self: center;
+}
+
+/* Scalar */
+.wt-scalar {
+  font-family: monospace; font-size: .95em;
+  color: var(--accent2); font-weight: 600;
+}
+
+/* Probability bar chart */
+.wt-prob-chart { margin-top: 6px; }
+.wt-prob-row {
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 3px; height: 22px;
+}
+.wt-prob-lbl {
+  width: 28px; text-align: right;
+  font-family: monospace; font-weight: 700; font-size: .8em;
+  color: #555;
+}
+.wt-prob-bar-bg {
+  flex: 1; height: 18px; background: #eee; border-radius: 3px;
+  overflow: hidden;
+}
+.wt-prob-bar {
+  height: 100%; border-radius: 3px;
+  transition: width .4s;
+}
+.wt-prob-pct {
+  width: 48px; font-size: .72em; font-family: monospace; color: #888;
+}
+.wt-prob-row.top .wt-prob-lbl { color: var(--accent2); }
+.wt-prob-row.top .wt-prob-bar { background: var(--accent); }
+.wt-prob-row:not(.top) .wt-prob-bar { background: #b0b8d0; }
+
+/* Note text in vars */
+.wt-note {
+  font-size: .82em; color: #888; font-style: italic;
+  margin-top: 6px; line-height: 1.5;
+}
+
+/* Chapter link */
+.wt-chapter {
+  display: inline-block; margin-top: 4px;
+  font-size: .85em; font-weight: 600;
+  background: #eef1ff; color: var(--accent2);
+  padding: 4px 14px; border-radius: 20px;
+  text-decoration: none;
+}
+.wt-chapter:hover { background: #e0e6ff; }
+
+/* Navigation */
+.wt-nav {
+  display: flex; justify-content: space-between;
+  align-items: center; margin-bottom: 6px;
+}
+.wt-nav button {
+  padding: 12px 28px; font-size: .95em;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: var(--radius);
+  cursor: pointer; font-weight: 600;
+  transition: background .2s, opacity .2s;
+}
+.wt-nav button:hover { background: var(--accent2); }
+.wt-nav button:disabled { opacity: .35; cursor: default; }
+.wt-nav button:disabled:hover { background: var(--accent); }
+.wt-counter {
+  font-size: .85em; color: #888; font-weight: 500;
+}
+.wt-hint {
+  text-align: center; font-size: .78em; color: #bbb;
+  margin-bottom: 40px;
+}
+.wt-hint kbd {
+  display: inline-block; padding: 2px 7px;
+  background: #eee; border: 1px solid #ccc;
+  border-radius: 4px; font-family: monospace;
+  font-size: .9em;
+}
+
+/* Grid for 64-dim MLP */
+.wt-grid {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  gap: 2px; margin-top: 6px;
+}
+.wt-gc {
+  height: 22px; border-radius: 2px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .55em; font-family: monospace;
+}
+.wt-gc.zero { background: #e8e8e8 !important; color: #bbb; }
+
+/* Responsive */
+@media (max-width: 600px) {
+  .wt-step { padding: 18px 14px 14px; }
+  .wt-vc { min-width: 30px; height: 22px; font-size: .6em; }
+  .wt-nav button { padding: 10px 18px; font-size: .85em; }
+  .wt-pipeline { gap: 4px; }
+  .wt-pipe-phase { padding: 3px 8px; font-size: .7em; }
+  .wt-grid { grid-template-columns: repeat(8, 1fr); }
+}
+</style>
+</head>
+<body>
+<button id="hamburger">&#9776;</button>
+<nav id="sidebar"></nav>
+<div class="progress-bar"><div class="fill"></div></div>
+
+<main id="content">
+  <h1>Interactive Code Walkthrough</h1>
+  <p class="subtitle">Step through a GPT forward pass — watch real numbers flow through the code.</p>
+
+  <div class="box info wt-intro">
+    <strong>Simulated execution</strong>
+    Use <kbd>←</kbd> <kbd>→</kbd> arrow keys or the buttons to step through the <code>gpt()</code> function.
+    Each step shows the Java code being "executed" and the actual values produced —
+    as if you were running a debugger on a trained model predicting the first letter of a name.
+  </div>
+
+  <!-- Pipeline phase indicator -->
+  <div class="wt-pipeline" id="pipeline"></div>
+
+  <!-- Step content -->
+  <div class="wt-step" id="step-container">
+    <div class="wt-step-header">
+      <div class="wt-step-num" id="step-num">1</div>
+      <h2 class="wt-step-title" id="step-title"></h2>
+    </div>
+    <pre class="wt-code" id="step-code"></pre>
+    <p class="wt-desc" id="step-desc"></p>
+    <div class="wt-vars" id="step-vars"></div>
+    <a class="wt-chapter" id="step-chapter" href="#"></a>
+  </div>
+
+  <!-- Navigation -->
+  <div class="wt-nav">
+    <button id="btn-prev" disabled>&larr; Previous</button>
+    <span class="wt-counter" id="step-counter">Step 1 of 15</span>
+    <button id="btn-next">Next &rarr;</button>
+  </div>
+  <p class="wt-hint">Navigate with <kbd>&larr;</kbd> <kbd>&rarr;</kbd> arrow keys</p>
+
+  <div class="page-nav"></div>
+</main>
+
+<script src="../js/nav.js"></script>
+<script src="../js/highlight.js"></script>
+<script>
+(function() {
+  // ═══════════════════════════════════════════
+  // Vocabulary & pre-computed simulation data
+  // ═══════════════════════════════════════════
+  const VOCAB = 'abcdefghijklmnopqrstuvwxyz'.split('').concat(['BOS']);
+
+  const D = {
+    wte: [0.12,-0.08,0.31,0.05,-0.14,0.22,-0.19,0.41,0.07,-0.26,0.15,0.33,-0.11,0.28,-0.03,0.17],
+    wpe: [0.06,0.14,-0.09,0.11,0.18,-0.12,0.04,-0.08,0.21,0.09,-0.05,0.13,0.16,-0.07,0.24,-0.10],
+    xEmbed: [0.18,0.06,0.22,0.16,0.04,0.10,-0.15,0.33,0.28,-0.17,0.10,0.46,0.05,0.21,0.21,0.07],
+    xNorm1: [0.87,0.29,1.07,0.78,0.19,0.49,-0.73,1.60,1.36,-0.83,0.49,2.24,0.24,1.02,1.02,0.34],
+    xNorm2: [0.81,0.27,1.00,0.73,0.18,0.46,-0.68,1.50,1.27,-0.78,0.46,2.10,0.22,0.96,0.96,0.32],
+    q: [0.42,-0.18,0.73,0.31,-0.55,0.14,0.62,-0.23,0.89,-0.41,0.16,0.58,-0.33,0.47,-0.12,0.65],
+    k: [0.35,-0.22,0.61,0.44,-0.38,0.27,0.51,-0.16,0.72,-0.33,0.29,0.48,-0.19,0.56,-0.08,0.41],
+    v: [0.28,-0.15,0.52,0.19,-0.42,0.36,0.44,-0.31,0.63,-0.25,0.38,0.55,-0.27,0.41,-0.14,0.49],
+    h0: [0.28,-0.15,0.52,0.19],
+    h1: [-0.42,0.36,0.44,-0.31],
+    h2: [0.63,-0.25,0.38,0.55],
+    h3: [-0.27,0.41,-0.14,0.49],
+    headsConcat: [0.28,-0.15,0.52,0.19,-0.42,0.36,0.44,-0.31,0.63,-0.25,0.38,0.55,-0.27,0.41,-0.14,0.49],
+    xAfterAttn: [1.02,0.21,1.40,0.89,-0.03,0.68,-0.46,1.46,1.77,-0.99,0.72,2.59,0.06,1.31,0.95,0.65],
+    mlpHidden: [1.23,0.00,0.85,0.00,1.67,0.34,0.00,0.92,0.00,1.45,0.00,0.78,1.12,0.00,0.56,0.00,
+                0.91,0.00,1.34,0.23,0.00,0.67,1.08,0.00,0.45,0.00,1.56,0.00,0.89,0.12,0.00,0.73,
+                1.01,0.00,0.64,0.00,1.38,0.00,0.82,0.47,0.00,1.15,0.00,0.93,0.28,0.00,1.42,0.00,
+                0.76,0.00,1.18,0.00,0.54,0.00,1.29,0.41,0.00,0.88,1.03,0.00,0.62,0.00,1.47,0.00],
+    xFinal: [1.36,0.10,1.92,1.12,-0.20,0.99,-0.28,1.37,2.22,-1.21,1.00,3.00,-0.07,1.67,1.10,0.92],
+    logits: [2.41,0.83,1.15,1.32,0.95,0.21,0.45,0.72,0.68,2.18,1.87,1.05,2.35,
+             0.91,0.55,0.38,-0.42,1.22,1.98,1.45,0.15,-0.31,0.28,-0.65,0.62,-0.48,-1.20],
+    probs: [0.129,0.027,0.037,0.043,0.030,0.014,0.018,0.024,0.023,0.103,0.075,0.033,0.122,
+            0.029,0.020,0.017,0.008,0.039,0.084,0.049,0.014,0.009,0.015,0.006,0.022,0.007,0.003]
+  };
+
+  // ═══════════════════════════════════════════
+  // Phase definitions for pipeline indicator
+  // ═══════════════════════════════════════════
+  const PHASES = [
+    { label: 'Embed', steps: [0,1] },
+    { label: 'Norm', steps: [2] },
+    { label: 'Attention', steps: [3,4,5,6,7,8,9,10] },
+    { label: 'MLP', steps: [11,12] },
+    { label: 'Output', steps: [13,14] }
+  ];
+
+  // ═══════════════════════════════════════════
+  // Step definitions
+  // ═══════════════════════════════════════════
+  const STEPS = [
+    // ── Step 0: Function call ──
+    {
+      title: 'The Question',
+      code:
+`<span class="ty">Value</span>[] logits = <span class="fn">gpt</span>(<span class="nu">26</span>, <span class="nu">0</span>, keys, values);
+<span class="cm">//                    ↑    ↑</span>
+<span class="cm">//               tokenId  posId</span>
+<span class="cm">//           BOS token   first position</span>`,
+      desc: 'We ask the model: given the start-of-sequence marker (BOS), what letter most likely begins a name? Token 26 is BOS, position 0 is the first slot.',
+      vars: [
+        { name: 'tokenId', type: 'scalar', value: '26 (BOS — Beginning of Sequence)' },
+        { name: 'posId', type: 'scalar', value: '0 (first position)' }
+      ],
+      chapter: { num: 1, title: 'What is a GPT?', file: '01-what-is-gpt.html' }
+    },
+
+    // ── Step 1: Embedding lookup ──
+    {
+      title: 'Embedding Lookup',
+      code:
+`<span class="ty">Value</span>[] x = <span class="kw">new</span> <span class="ty">Value</span>[<span class="nu">16</span>];
+<span class="kw">for</span> (<span class="kw">int</span> i = <span class="nu">0</span>; i &lt; <span class="nu">16</span>; i++)
+    x[i] = wte[<span class="nu">26</span>][i].<span class="fn">add</span>(wpe[<span class="nu">0</span>][i]);`,
+      desc: 'Look up BOS in the word-embedding table (row 26) and add position-0 encoding. The result is a 16-number vector — the model\'s internal representation of "start, first position."',
+      vars: [
+        { name: 'wte[26]', type: 'vector', data: D.wte, label: 'Token embedding for BOS' },
+        { type: 'op', text: '+' },
+        { name: 'wpe[0]', type: 'vector', data: D.wpe, label: 'Position encoding for slot 0' },
+        { type: 'op', text: '=' },
+        { name: 'x', type: 'vector', data: D.xEmbed, label: 'Combined embedding (16 dimensions)', highlight: true }
+      ],
+      chapter: { num: 3, title: 'Embeddings', file: '03-embeddings.html' }
+    },
+
+    // ── Step 2: Initial RMSNorm ──
+    {
+      title: 'RMSNorm',
+      code:
+`x = <span class="fn">rmsnorm</span>(x);
+<span class="cm">// RMS = √(mean of x²) = 0.206</span>
+<span class="cm">// scale = 1 / 0.206 ≈ 4.86</span>
+<span class="cm">// x[i] = x[i] × scale</span>`,
+      desc: 'Normalize the vector so no single dimension dominates. RMSNorm divides each value by the root-mean-square, rescaling everything to a consistent magnitude.',
+      vars: [
+        { name: 'RMS', type: 'scalar', value: '√(mean of x²) = 0.206' },
+        { name: 'scale', type: 'scalar', value: '1 / 0.206 = 4.86' },
+        { name: 'x', type: 'vector', data: D.xNorm1, label: 'Normalized — values now span a wider, consistent range', highlight: true }
+      ],
+      chapter: { num: 6, title: 'Neural Network Layers', file: '06-neural-networks.html' }
+    },
+
+    // ── Step 3: Save residual + pre-attention norm ──
+    {
+      title: 'Save Residual',
+      code:
+`<span class="ty">Value</span>[] xr = x;        <span class="cm">// save a copy</span>
+x = <span class="fn">rmsnorm</span>(x);       <span class="cm">// normalize before attention</span>`,
+      desc: 'Save the current vector — after attention processes it, we\'ll add this copy back. This "residual connection" gives the model a shortcut that helps gradients flow during training.',
+      vars: [
+        { name: 'xr', type: 'vector', data: D.xNorm1, label: 'Saved copy (will be added back in step 11)' },
+        { name: 'x', type: 'vector', data: D.xNorm2, label: 'Re-normalized for attention input' }
+      ],
+      chapter: { num: 8, title: 'The Transformer', file: '08-transformer.html' }
+    },
+
+    // ── Step 4: Q, K, V projections ──
+    {
+      title: 'Q, K, V Projections',
+      code:
+`<span class="ty">Value</span>[] q = <span class="fn">linear</span>(x, attn_wq);  <span class="cm">// Query</span>
+<span class="ty">Value</span>[] k = <span class="fn">linear</span>(x, attn_wk);  <span class="cm">// Key</span>
+<span class="ty">Value</span>[] v = <span class="fn">linear</span>(x, attn_wv);  <span class="cm">// Value</span>`,
+      desc: 'Three separate matrix multiplications create the attention vectors. Q asks "what am I looking for?", K says "what do I contain?", V holds "what information should I pass along?"',
+      vars: [
+        { name: 'Q', type: 'vector', data: D.q, label: 'Query — "what am I looking for?"', color: 'blue' },
+        { name: 'K', type: 'vector', data: D.k, label: 'Key — "what do I contain?"', color: 'green' },
+        { name: 'V', type: 'vector', data: D.v, label: 'Value — "what to pass along"', color: 'orange' }
+      ],
+      chapter: { num: 7, title: 'The Attention Mechanism', file: '07-attention.html' }
+    },
+
+    // ── Step 5: Cache K, V ──
+    {
+      title: 'Cache K, V',
+      code:
+`keys[<span class="nu">0</span>].<span class="fn">add</span>(k);      <span class="cm">// store for future tokens</span>
+values[<span class="nu">0</span>].<span class="fn">add</span>(v);`,
+      desc: 'Store K and V in the cache so future tokens can look back at this position. When the model later processes "a" at position 1, it will attend to both position 0 (this one) and position 1.',
+      vars: [
+        { name: 'KV cache', type: 'scalar', value: '1 entry (position 0)' },
+        { type: 'note', text: 'The cache grows with each token. At position 5, there would be 5 entries — each Q can attend to all past K/V pairs.' }
+      ],
+      chapter: { num: 7, title: 'The Attention Mechanism', file: '07-attention.html' }
+    },
+
+    // ── Step 6: Head 0 attention score ──
+    {
+      title: 'Head 0 — Attention Score',
+      code:
+`<span class="cm">// Head 0 uses dims 0–3 of Q and K</span>
+<span class="ty">Value</span>[] qh = {q[<span class="nu">0</span>], q[<span class="nu">1</span>], q[<span class="nu">2</span>], q[<span class="nu">3</span>]};
+<span class="ty">Value</span> score = <span class="fn">dot</span>(qh, kh) / Math.<span class="fn">sqrt</span>(<span class="nu">4</span>);`,
+      desc: 'Head 0 takes the first 4 dimensions. The dot product measures how well Query matches Key — higher means more relevant. Dividing by √headDim prevents scores from growing too large.',
+      vars: [
+        { name: 'Q head 0', type: 'vector', data: D.q.slice(0,4), label: 'q[0..3]' },
+        { name: 'K head 0', type: 'vector', data: D.k.slice(0,4), label: 'k[0..3]' },
+        { name: 'dot product', type: 'scalar', value: '0.42×0.35 + (−0.18)×(−0.22) + 0.73×0.61 + 0.31×0.44 = 0.77' },
+        { name: 'scaled', type: 'scalar', value: '0.77 ÷ √4 = 0.77 ÷ 2 = 0.38' }
+      ],
+      chapter: { num: 7, title: 'The Attention Mechanism', file: '07-attention.html' }
+    },
+
+    // ── Step 7: Softmax ──
+    {
+      title: 'Head 0 — Softmax → Weights',
+      code:
+`<span class="ty">Value</span>[] weights = <span class="fn">softmax</span>(<span class="kw">new</span> <span class="ty">Value</span>[]{score});
+<span class="cm">// softmax([0.38]) → [1.00]</span>
+<span class="cm">// Only 1 position to attend to</span>`,
+      desc: 'With only one token in the sequence so far, softmax trivially gives weight 1.0 — all attention goes to the only available position (itself).',
+      vars: [
+        { name: 'scores', type: 'vector', data: [0.38], label: 'Only 1 position' },
+        { name: 'weights', type: 'vector', data: [1.00], label: 'softmax → 100% on position 0', highlight: true },
+        { type: 'note', text: 'With more tokens, attention splits. E.g. at position 2 ("m" in "sam"), head 0 might produce weights [0.18, 0.38, 0.44] — the model focuses most on the recent vowel.' }
+      ],
+      chapter: { num: 4, title: 'Probabilities & Softmax', file: '04-math-basics.html' }
+    },
+
+    // ── Step 8: Weighted sum ──
+    {
+      title: 'Head 0 — Weighted Sum',
+      code:
+`<span class="ty">Value</span>[] ho = <span class="kw">new</span> <span class="ty">Value</span>[<span class="nu">4</span>];
+<span class="kw">for</span> (<span class="kw">int</span> j = <span class="nu">0</span>; j &lt; <span class="nu">4</span>; j++)
+    ho[j] = weights[<span class="nu">0</span>].<span class="fn">mul</span>(v[j]);
+<span class="cm">// = 1.00 × V[0..3]</span>`,
+      desc: 'Blend value vectors weighted by attention. With weight 1.0, the output equals V itself — but with multiple tokens, this weighted sum would mix information from different positions.',
+      vars: [
+        { name: 'head 0 output', type: 'vector', data: D.h0, label: '= 1.00 × V[0..3]', highlight: true }
+      ],
+      chapter: { num: 7, title: 'The Attention Mechanism', file: '07-attention.html' }
+    },
+
+    // ── Step 9: All 4 heads ──
+    {
+      title: 'All 4 Heads → Concatenate',
+      code:
+`<span class="cm">// Each head attends independently</span>
+<span class="cm">// head 0 → dims 0–3, head 1 → dims 4–7, ...</span>
+xAttn = <span class="fn">concat</span>(h0, h1, h2, h3); <span class="cm">// → 16 values</span>`,
+      desc: 'Each head attends independently — they can learn different patterns (one might focus on vowels, another on consonant clusters). Concatenating the 4 outputs of 4 dims each gives back a 16-dim vector.',
+      vars: [
+        { name: 'head 0', type: 'vector', data: D.h0, label: 'dims 0–3' },
+        { name: 'head 1', type: 'vector', data: D.h1, label: 'dims 4–7' },
+        { name: 'head 2', type: 'vector', data: D.h2, label: 'dims 8–11' },
+        { name: 'head 3', type: 'vector', data: D.h3, label: 'dims 12–15' },
+        { type: 'op', text: 'concat →' },
+        { name: 'xAttn', type: 'vector', data: D.headsConcat, label: '16 dimensions (4 heads × 4 dims)', highlight: true }
+      ],
+      chapter: { num: 7, title: 'The Attention Mechanism', file: '07-attention.html' }
+    },
+
+    // ── Step 10: Attention output + residual ──
+    {
+      title: 'Attention Output + Residual',
+      code:
+`x = <span class="fn">linear</span>(xAttn, attn_wo);    <span class="cm">// project</span>
+<span class="kw">for</span> (<span class="kw">int</span> i = <span class="nu">0</span>; i &lt; <span class="nu">16</span>; i++)
+    x[i] = x[i].<span class="fn">add</span>(xr[i]);     <span class="cm">// + residual</span>`,
+      desc: 'Project the concatenated heads back to embedding space, then add the saved residual from step 3. The residual connection means the model blends new information from attention with the original signal.',
+      vars: [
+        { name: 'x', type: 'vector', data: D.xAfterAttn, label: 'After attention output projection + residual', highlight: true }
+      ],
+      chapter: { num: 8, title: 'The Transformer', file: '08-transformer.html' }
+    },
+
+    // ── Step 11: MLP expand + ReLU ──
+    {
+      title: 'MLP — Expand + ReLU',
+      code:
+`xr = x;                            <span class="cm">// save residual</span>
+x = <span class="fn">rmsnorm</span>(x);
+x = <span class="fn">linear</span>(x, mlp_fc1);          <span class="cm">// 16 → 64</span>
+<span class="kw">for</span> (<span class="kw">int</span> i = <span class="nu">0</span>; i &lt; <span class="nu">64</span>; i++)
+    x[i] = x[i].<span class="fn">relu</span>();           <span class="cm">// zero negatives</span>`,
+      desc: 'The MLP block expands to 4× wider (16→64), then ReLU zeros out all negative values. This creates a sparse activation pattern — each neuron fires (or not) for different features.',
+      vars: [
+        { name: 'MLP hidden', type: 'grid', data: D.mlpHidden, label: '64 dimensions after ReLU' },
+        { type: 'note', text: '37 of 64 neurons fire (58%). The zeros (gray) are features this input doesn\'t activate. Different inputs light up different neurons.' }
+      ],
+      chapter: { num: 6, title: 'Neural Network Layers', file: '06-neural-networks.html' }
+    },
+
+    // ── Step 12: MLP compress + residual ──
+    {
+      title: 'MLP — Compress + Residual',
+      code:
+`x = <span class="fn">linear</span>(x, mlp_fc2);          <span class="cm">// 64 → 16</span>
+<span class="kw">for</span> (<span class="kw">int</span> i = <span class="nu">0</span>; i &lt; <span class="nu">16</span>; i++)
+    x[i] = x[i].<span class="fn">add</span>(xr[i]);      <span class="cm">// + residual</span>`,
+      desc: 'Compress back to 16 dimensions and add the MLP residual. One full transformer block is now complete — the vector has been enriched by both attention (context from other positions) and the MLP (feature detection).',
+      vars: [
+        { name: 'x', type: 'vector', data: D.xFinal, label: 'After full transformer block (1 of 1 layers)', highlight: true },
+        { type: 'note', text: 'GPT-4 repeats this block ~120 times. Each layer refines the representation further.' }
+      ],
+      chapter: { num: 8, title: 'The Transformer', file: '08-transformer.html' }
+    },
+
+    // ── Step 13: Output projection ──
+    {
+      title: 'Output Projection → Logits',
+      code:
+`<span class="kw">return</span> <span class="fn">linear</span>(x, lm_head);       <span class="cm">// 16 → 27</span>`,
+      desc: 'Project from 16 dimensions to 27 — one raw score (logit) per character in the vocabulary (a–z + BOS). Higher logit means the model thinks that character is more likely to come next.',
+      vars: [
+        { name: 'logits', type: 'logits', data: D.logits, label: 'Raw scores — one per character' }
+      ],
+      chapter: { num: 6, title: 'Neural Network Layers', file: '06-neural-networks.html' }
+    },
+
+    // ── Step 14: Probabilities ──
+    {
+      title: 'Result — Next-Token Probabilities',
+      code:
+`<span class="ty">Value</span>[] probs = <span class="fn">softmax</span>(logits);
+<span class="cm">// Convert raw scores → probabilities summing to 1.0</span>`,
+      desc: 'Softmax turns logits into probabilities. The model predicts: \'a\' is the most likely first letter of a name (12.9%), followed by \'m\' (12.2%) and \'j\' (10.3%). These match real English name frequencies.',
+      vars: [
+        { name: 'probabilities', type: 'probs', data: D.probs, label: 'Next character prediction' }
+      ],
+      chapter: { num: 4, title: 'Probabilities & Softmax', file: '04-math-basics.html' }
+    }
+  ];
+
+  // ═══════════════════════════════════════════
+  // Rendering helpers
+  // ═══════════════════════════════════════════
+  function vecColor(val, maxAbs) {
+    maxAbs = maxAbs || 2.5;
+    var t = Math.max(-1, Math.min(1, val / maxAbs));
+    if (t >= 0) return 'rgba(67,97,238,' + (t * 0.6 + 0.06).toFixed(2) + ')';
+    return 'rgba(231,76,60,' + (-t * 0.6 + 0.06).toFixed(2) + ')';
+  }
+
+  function renderVector(v, maxAbs) {
+    maxAbs = maxAbs || 2.5;
+    return '<div class="wt-vec">' +
+      v.data.map(function(val) {
+        return '<span class="wt-vc" style="background:' + vecColor(val, maxAbs) +
+          ';color:' + (Math.abs(val) > maxAbs * 0.5 ? '#fff' : '#333') + '">' +
+          val.toFixed(2) + '</span>';
+      }).join('') +
+      '<span class="wt-vec-dim">' + v.data.length + ' values</span></div>';
+  }
+
+  function renderGrid(v) {
+    return '<div class="wt-grid">' +
+      v.data.map(function(val) {
+        var isZero = val === 0;
+        return '<span class="wt-gc' + (isZero ? ' zero' : '') + '" style="background:' +
+          (isZero ? '' : vecColor(val, 2.0)) + '" title="' + val.toFixed(2) + '">' +
+          (isZero ? '0' : val.toFixed(1)) + '</span>';
+      }).join('') + '</div>';
+  }
+
+  function renderLogits(v) {
+    var pairs = v.data.map(function(val, i) { return { ch: VOCAB[i], val: val, i: i }; });
+    pairs.sort(function(a, b) { return b.val - a.val; });
+    var maxVal = Math.max.apply(null, v.data);
+    var minVal = Math.min.apply(null, v.data);
+    var range = maxVal - minVal || 1;
+    var html = '<div class="wt-prob-chart">';
+    pairs.forEach(function(p, rank) {
+      var pct = ((p.val - minVal) / range * 100).toFixed(1);
+      var isTop = rank < 5;
+      html += '<div class="wt-prob-row' + (isTop ? ' top' : '') + '">' +
+        '<span class="wt-prob-lbl">' + p.ch + '</span>' +
+        '<span class="wt-prob-bar-bg"><span class="wt-prob-bar" style="width:' + pct + '%"></span></span>' +
+        '<span class="wt-prob-pct">' + p.val.toFixed(2) + '</span></div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function renderProbs(v) {
+    var pairs = v.data.map(function(val, i) { return { ch: VOCAB[i], val: val, i: i }; });
+    pairs.sort(function(a, b) { return b.val - a.val; });
+    var maxProb = pairs[0].val;
+    var html = '<div class="wt-prob-chart">';
+    pairs.forEach(function(p, rank) {
+      var pct = (p.val / maxProb * 100).toFixed(1);
+      var isTop = rank < 5;
+      html += '<div class="wt-prob-row' + (isTop ? ' top' : '') + '">' +
+        '<span class="wt-prob-lbl">' + p.ch + '</span>' +
+        '<span class="wt-prob-bar-bg"><span class="wt-prob-bar" style="width:' + pct + '%"></span></span>' +
+        '<span class="wt-prob-pct">' + (p.val * 100).toFixed(1) + '%</span></div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function renderVars(vars, container) {
+    container.innerHTML = '';
+    vars.forEach(function(v) {
+      if (v.type === 'op') {
+        var op = document.createElement('div');
+        op.className = 'wt-vec-op';
+        op.textContent = v.text;
+        container.appendChild(op);
+        return;
+      }
+      if (v.type === 'note') {
+        var note = document.createElement('div');
+        note.className = 'wt-note';
+        note.textContent = v.text;
+        container.appendChild(note);
+        return;
+      }
+      var div = document.createElement('div');
+      div.className = 'wt-var';
+      if (v.highlight) div.style.borderColor = 'var(--accent)';
+      var label = '';
+      if (v.name) label += '<span class="wt-var-name">' + v.name + '</span>';
+      if (v.label) label += ' <span class="wt-var-label" style="display:inline">' + v.label + '</span>';
+      var content = '';
+      if (v.type === 'scalar') {
+        content = '<div class="wt-scalar">' + v.value + '</div>';
+      } else if (v.type === 'vector') {
+        content = renderVector(v);
+      } else if (v.type === 'grid') {
+        content = renderGrid(v);
+      } else if (v.type === 'logits') {
+        content = renderLogits(v);
+      } else if (v.type === 'probs') {
+        content = renderProbs(v);
+      }
+      div.innerHTML = (label ? '<div style="margin-bottom:6px">' + label + '</div>' : '') + content;
+      container.appendChild(div);
+    });
+  }
+
+  // ═══════════════════════════════════════════
+  // Build pipeline indicator
+  // ═══════════════════════════════════════════
+  var pipeEl = document.getElementById('pipeline');
+  PHASES.forEach(function(phase, i) {
+    if (i > 0) {
+      var arrow = document.createElement('span');
+      arrow.className = 'wt-pipe-arrow';
+      arrow.textContent = '→';
+      pipeEl.appendChild(arrow);
+    }
+    var span = document.createElement('span');
+    span.className = 'wt-pipe-phase';
+    span.textContent = phase.label;
+    span.dataset.phase = i;
+    pipeEl.appendChild(span);
+  });
+
+  // ═══════════════════════════════════════════
+  // Stepper logic
+  // ═══════════════════════════════════════════
+  var current = 0;
+  var stepNum = document.getElementById('step-num');
+  var stepTitle = document.getElementById('step-title');
+  var stepCode = document.getElementById('step-code');
+  var stepDesc = document.getElementById('step-desc');
+  var stepVars = document.getElementById('step-vars');
+  var stepChapter = document.getElementById('step-chapter');
+  var stepCounter = document.getElementById('step-counter');
+  var btnPrev = document.getElementById('btn-prev');
+  var btnNext = document.getElementById('btn-next');
+  var container = document.getElementById('step-container');
+
+  function render(idx) {
+    var s = STEPS[idx];
+    stepNum.textContent = idx + 1;
+    stepTitle.textContent = s.title;
+    stepCode.innerHTML = s.code;
+    stepDesc.textContent = s.desc;
+    renderVars(s.vars, stepVars);
+    stepChapter.textContent = 'More info → Ch.' + s.chapter.num + ': ' + s.chapter.title;
+    stepChapter.href = s.chapter.file;
+    stepCounter.textContent = 'Step ' + (idx + 1) + ' of ' + STEPS.length;
+    btnPrev.disabled = idx === 0;
+    btnNext.disabled = idx === STEPS.length - 1;
+
+    // Update pipeline
+    var activePhase = -1;
+    PHASES.forEach(function(phase, pi) {
+      if (phase.steps.indexOf(idx) !== -1) activePhase = pi;
+    });
+    var phases = pipeEl.querySelectorAll('.wt-pipe-phase');
+    phases.forEach(function(el) {
+      el.classList.toggle('active', parseInt(el.dataset.phase) === activePhase);
+    });
+
+    // Subtle fade
+    container.style.opacity = '0';
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        container.style.opacity = '1';
+      });
+    });
+  }
+
+  function goTo(idx) {
+    if (idx < 0 || idx >= STEPS.length) return;
+    current = idx;
+    render(current);
+    container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  btnPrev.addEventListener('click', function() { goTo(current - 1); });
+  btnNext.addEventListener('click', function() { goTo(current + 1); });
+
+  // Keyboard navigation
+  document.addEventListener('keydown', function(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); goTo(current - 1); }
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); goTo(current + 1); }
+  });
+
+  // Initial render
+  render(0);
+})();
+</script>
+</body>
+</html>

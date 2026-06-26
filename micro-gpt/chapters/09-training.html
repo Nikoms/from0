@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Training & Optimization — MicroGPT Course</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  .columns { display: flex; gap: 18px; flex-wrap: wrap; margin: 18px 0; }
+  .columns .col { flex: 1; min-width: 240px; }
+  .demo .controls { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .demo .controls label { font-weight: 600; font-size: .9em; }
+  .demo input[type=range] { flex: 1; min-width: 160px; }
+  .demo .output { font-family: 'SF Mono','Fira Code',monospace; font-size: .95em; margin-top: 12px;
+                  background: #f4f4fb; padding: 10px 14px; border-radius: 6px; }
+  .demo canvas { width: 100%; max-width: 560px; display: block; background: #fff;
+                 border: 1px solid #e6e6ee; border-radius: 6px; touch-action: none; }
+  .demo .hint { font-size: .82em; color: #777; margin-top: 8px; }
+  .demo .regime { font-weight: 700; }
+  .ball { font-size: 1.1em; }
+</style>
+</head>
+<body>
+<button id="hamburger">&#9776;</button>
+<nav id="sidebar"></nav>
+<div class="progress-bar"><div class="fill"></div></div>
+<main id="content">
+
+  <h1>Training &amp; Optimization</h1>
+  <p class="subtitle">
+    <span class="difficulty advanced">Advanced</span>
+    How a pile of 4,192 random numbers becomes a name generator. We measure wrongness,
+    figure out which way to nudge every number, and take a small step — a thousand times.
+  </p>
+
+  <p>
+    By now you know the model is just parameters (Chapter 1) and that a forward pass turns
+    tokens into a guess (Chapters 6–8). This chapter is the other half: <strong>learning</strong>.
+    Learning is a loop of four moves — guess, measure how wrong, find the downhill direction,
+    step. Let's build each move from the ground up.
+  </p>
+
+  <h2>1. The loss function — turning "wrong" into a number</h2>
+
+  <p>
+    The model's output for one position is a <strong>probability</strong> for every one of the
+    27 possible next tokens (that's what softmax gave us in Chapter 4). We <em>know</em> the real
+    next character from the training name. So we can ask one sharp question: <em>how much
+    probability did the model put on the correct answer?</em>
+  </p>
+
+  <p>
+    If it put 100% on the right letter, it was perfect. If it put almost nothing there, it was
+    badly wrong. We need to convert "probability of the correct answer" into a single
+    <strong>loss</strong> number where <em>small means good</em>. The formula that does this is
+    called <strong>cross-entropy loss</strong>, and for a single prediction it is dead simple:
+  </p>
+
+  <div class="math-block">
+    loss = &minus;log( probability of the correct token )
+  </div>
+
+  <p>
+    That minus-log is the whole trick. Remember from Chapter 4 that <code>log()</code> of a number
+    between 0 and 1 is negative, and it dives toward &minus;&infin; as the number approaches 0.
+    Sticking a minus sign in front flips it positive, so:
+  </p>
+
+  <ul>
+    <li>Correct token got probability <strong>0.7</strong> &rarr; loss = &minus;log(0.7) =
+        <strong>0.36</strong>. Pretty good.</li>
+    <li>Correct token got probability <strong>0.01</strong> &rarr; loss = &minus;log(0.01) =
+        <strong>4.6</strong>. Much worse!</li>
+    <li>Correct token got probability <strong>1.0</strong> &rarr; loss = &minus;log(1) =
+        <strong>0</strong>. Perfect, zero loss.</li>
+  </ul>
+
+  <div class="box info">
+    <strong>Why log, and not just "1 minus the probability"?</strong>
+    Log <em>punishes confident mistakes brutally</em>. Being 1% sure of the right answer isn't
+    just "a bit worse" than 70% — it's <em>twelve times</em> the loss. That steep penalty pushes
+    the model to stop being confidently wrong, which turns out to be exactly the right pressure.
+    All logs here are natural logs (base <em>e</em>), matching Java's <code>Math.log</code>.
+  </div>
+
+  <div class="box tip">
+    <strong>Real-life analogy</strong>
+    Cross-entropy is a teacher grading confidence. A student says "I'm 90% sure the
+    answer is A." If it really is A, the teacher gives a great grade (low loss). If it's
+    actually B, the teacher gives a terrible grade (high loss) — because the student was
+    <em>confident and wrong</em>. The more confident a wrong answer, the harsher the
+    penalty. That's exactly why cross-entropy punishes confident mistakes far more than
+    uncertain ones.
+  </div>
+
+  <div class="box info">
+    <strong>But why cross-entropy, and not just "percentage correct"?</strong>
+    Because "percentage correct" isn't <em>differentiable</em>. It jumps between 0 and 1 with a flat line in
+    between, so its gradient is zero almost everywhere — useless for gradient descent, which only knows how to
+    follow slopes. Cross-entropy is smooth: it gives partial credit for being <em>almost</em> right
+    (probability 0.9 on the correct answer) and punishes being confidently wrong (0.01 on the correct answer)
+    far more steeply. That continuous gradient is what lets the model improve in tiny, learnable steps.
+  </div>
+
+  <p>In the Java code, this is one line inside the training loop:</p>
+
+  <pre><code class="language-java">            Value loss = Value.of(0);
+            for (int pos = 0; pos &lt; n; pos++) {
+                Value[] logits = gpt(tokens.get(pos),
+                                     pos, keys, vals);
+                Value[] probs = softmax(logits);
+                loss = loss.add(
+                    probs[tokens.get(pos + 1)]
+                        .log().neg());
+            }
+            loss = loss.div(Value.of(n));</code></pre>
+
+  <p>
+    Read <code>probs[tokens.get(pos + 1)]</code> as "the probability the model assigned to the
+    token that actually comes next." We take its <code>.log()</code>, then <code>.neg()</code>
+    (negate it), and add it onto the running <code>loss</code>. After looping over every position
+    in the name, we divide by <code>n</code> to get the <em>average</em> loss per character. One
+    number summarising how wrong the model was on this whole name.
+  </p>
+
+  <div class="box info">
+    <strong>But why average the loss over the sequence (divide by <code>n</code>)?</strong>
+    Without averaging, a longer name would rack up a bigger total loss just because it has more characters —
+    more positions, more chances to be penalized. The model would then treat long names as "more important"
+    and preferentially learn short ones, purely as an artifact of length. Dividing by <code>n</code> makes the
+    loss a per-character average, comparable across names of any length, so every name pulls on the weights
+    with equal weight.
+  </div>
+
+  <div class="box tip">
+    <strong>The "random guessing" baseline</strong>
+    With 27 equally-likely tokens, a clueless model puts 1/27 on each. Its loss is
+    &minus;log(1/27) = log(27) &asymp; <strong>3.30</strong>. That's why untrained loss starts
+    around 3.3–3.4: the model is literally guessing. Training's job is to drive that number down.
+  </div>
+
+  <div class="box tip">
+    <strong>Concrete example</strong>
+    <p>
+      <strong>Input:</strong> the untrained model is shown the name <strong>emma</strong>, tokenized as
+      <code>[BOS, e, m, m, a, BOS]</code>. At each position it predicts the <em>next</em> token; we read off
+      the probability it gave the correct one and take &minus;ln of it.
+    </p>
+    <table>
+      <tr><th>Position</th><th>Input</th><th>Correct next</th><th>p(correct)</th><th>loss = &minus;ln(p)</th></tr>
+      <tr><td>0</td><td>BOS</td><td>e</td><td>0.04</td><td>3.22</td></tr>
+      <tr><td>1</td><td>e</td><td>m</td><td>0.03</td><td>3.51</td></tr>
+      <tr><td>2</td><td>m</td><td>m</td><td>0.08</td><td>2.53</td></tr>
+      <tr><td>3</td><td>m</td><td>a</td><td>0.05</td><td>3.00</td></tr>
+      <tr><td>4</td><td>a</td><td>BOS (end)</td><td>0.04</td><td>3.22</td></tr>
+    </table>
+    <p>
+      <strong>Output:</strong> average loss = (3.22 + 3.51 + 2.53 + 3.00 + 3.22) / 5 =
+      <strong>3.10</strong>.
+    </p>
+    <p>
+      That's right at the random-guessing baseline of &minus;ln(1/27) &asymp; 3.29 — the model has learned
+      nothing yet. After 1,000 training steps these per-position losses drop dramatically (the correct token
+      gets far more probability), pulling the average down toward ~2.2.
+    </p>
+  </div>
+
+  <h3>Try it: drag the bars</h3>
+  <p>
+    Below are the model's 27 probabilities. The correct next character is
+    <strong style="color:var(--green)">'a'</strong> (highlighted green). Drag any bar up or down
+    to change how the model spread its confidence — the bars always renormalise to sum to 100%,
+    and the loss updates live. Try making <code>'a'</code> tall (low loss) vs. tiny (high loss).
+  </p>
+
+  <div class="demo">
+    <canvas id="ceCanvas" width="560" height="220"></canvas>
+    <div class="output" id="ceOut"></div>
+    <div class="hint">Drag inside the chart. The green bar is the correct answer; loss = &minus;ln( its probability ).</div>
+  </div>
+
+  <h2>2. Backpropagation — which way is downhill?</h2>
+
+  <p>
+    We have one number, <code>loss</code>, and we want it smaller. The loss was produced by a long
+    chain of arithmetic involving all 4,192 parameters. The question is: for <em>each</em>
+    parameter, if I wiggle it slightly, does the loss go up or down, and how fast?
+  </p>
+
+  <p>
+    That "how fast does loss change when I wiggle this one parameter" number is the parameter's
+    <strong>gradient</strong>. Computing all 4,192 gradients by hand would be insane. Instead we
+    call one method — the engine you built in Chapter 5:
+  </p>
+
+  <pre><code class="language-java">            // Backward pass for gradient computation
+            loss.backward();</code></pre>
+
+  <p>
+    A single call to <code>loss.backward()</code> walks the entire computation graph backwards,
+    applies the chain rule at every node, and fills in the <code>.grad</code> field of
+    <em>every</em> parameter. After it returns, each parameter knows its own gradient.
+  </p>
+
+  <div class="box info">
+    <strong>What a gradient actually tells you</strong>
+    A parameter's gradient is a slope: "if I increase this parameter by a tiny amount
+    <em>h</em>, the loss changes by roughly <em>grad &times; h</em>."
+    <ul style="margin:8px 0 0 18px">
+      <li><strong>Positive gradient</strong> &rarr; increasing the parameter <em>increases</em> loss
+          (bad). So we should <em>decrease</em> it.</li>
+      <li><strong>Negative gradient</strong> &rarr; increasing the parameter <em>decreases</em> loss
+          (good). So we should <em>increase</em> it.</li>
+    </ul>
+    Either way: <em>move the parameter in the direction opposite to its gradient.</em> That single
+    rule is the heart of all the training that follows.
+  </div>
+
+  <h2>3. Gradient descent — taking the step</h2>
+
+  <p>
+    Now we use those gradients. The simplest possible update, called <strong>gradient descent</strong>,
+    is one line per parameter:
+  </p>
+
+  <pre><code class="language-java">param.data -= learningRate * param.grad;</code></pre>
+
+  <p>
+    Subtracting <code>grad</code> moves us <em>opposite</em> to the gradient — downhill, toward
+    lower loss. The <strong>learning rate</strong> controls how big a step we take. In our code it
+    starts at <code>0.01</code>. Picking it is a balancing act:
+  </p>
+
+  <div class="columns">
+    <div class="col">
+      <h4>Too small</h4>
+      <p>Each step barely moves. Training crawls; you'd need millions of steps to get anywhere.
+         Safe but painfully slow.</p>
+    </div>
+    <div class="col">
+      <h4>Just right</h4>
+      <p>Steps are big enough to make real progress each time, small enough not to fly past the
+         bottom. Loss falls steadily.</p>
+    </div>
+    <div class="col">
+      <h4>Too big</h4>
+      <p>You leap clear over the valley to a <em>higher</em> spot on the other side, then leap
+         back even higher. Loss oscillates or explodes to infinity.</p>
+    </div>
+  </div>
+
+  <div class="box warn">
+    <strong>The marble-in-a-bowl picture</strong>
+    Imagine loss as a landscape and the parameters as the position of a marble. The gradient is
+    the slope under the marble. Gradient descent rolls the marble a little way downhill, re-checks
+    the slope, rolls again. Learning rate is how far you shove it each time.
+  </div>
+
+  <h2>4. Adam — a smarter step (what our code really uses)</h2>
+
+  <p>
+    Plain gradient descent uses the <em>same</em> learning rate for every parameter and forgets
+    everything between steps. That's wasteful. Some parameters have steep, consistent slopes;
+    others have tiny, noisy ones. They shouldn't all take identically-sized steps. The
+    <strong>Adam optimizer</strong> fixes this by remembering two running averages for each
+    parameter <code>i</code>:
+  </p>
+
+  <ul>
+    <li><strong><code>m[i]</code> — momentum.</strong> A smoothed average of recent gradients.
+        If a parameter keeps getting pushed the same way, momentum builds up and it moves faster
+        in that direction — like a ball that keeps rolling.</li>
+    <li><strong><code>v[i]</code> — squared gradient.</strong> A running average of how
+        <em>large</em> this parameter's gradients have been. It measures how "noisy" or "active"
+        the parameter is.</li>
+  </ul>
+
+  <div class="box tip">
+    <strong>Real-life analogy</strong>
+    Adam is a ball rolling downhill with momentum. Plain gradient descent cautiously
+    steps downhill one tiny step at a time; Adam is a ball that builds up speed — rolling
+    faster in consistent directions and slowing down on bumpy terrain. It also adjusts its
+    speed per-dimension: if the slope has been steadily steep one way, the ball learns to
+    roll faster there.
+  </div>
+
+  <div class="box info">
+    <strong>But why Adam and not plain gradient descent?</strong>
+    Plain gradient descent uses the <em>same</em> learning rate for all 4,192 parameters. But they don't all
+    need the same step: some sit in flat regions and need a big shove, others sit near a sharp optimum and a
+    big step would overshoot. Adam adapts the step size <em>per parameter</em>, using running averages of each
+    one's past gradients — effectively giving every parameter its own speedometer. That per-parameter tuning
+    is why it converges faster and more reliably than one global learning rate ever could.
+  </div>
+
+  <p>Here is the exact Adam update from our training loop, line by line:</p>
+
+  <pre><code class="language-java">            // Adam parameter update with linear LR decay
+            double lrt = lr * (1.0 - step / (double) nSteps);
+            for (int i = 0; i &lt; params.size(); i++) {
+                double g = params.get(i).g();
+                m[i] = b1 * m[i] + (1 - b1) * g;
+                v[i] = b2 * v[i] + (1 - b2) * g * g;
+                double mh = m[i]
+                    / (1 - Math.pow(b1, step + 1)),
+                    vh = v[i]
+                    / (1 - Math.pow(b2, step + 1));
+                params.get(i).data[0] -=
+                    lrt * mh / (Math.sqrt(vh) + epsAdam);
+                params.get(i).grad[0] = 0;
+            }</code></pre>
+
+  <div class="annotation-text" style="background:#f8f8ff;border-left:4px solid var(--accent);padding:12px 16px;border-radius:6px;margin:0 0 24px;font-size:.95em">
+    <strong>Line by line:</strong>
+    <ul style="margin:8px 0 0 18px">
+      <li><code>g = params.get(i).g()</code> — grab this parameter's gradient (set by
+          <code>backward()</code>).</li>
+      <li><code>m[i] = b1*m[i] + (1-b1)*g</code> — blend 85% of the old momentum with 15% of the
+          new gradient. Smooths out jitter so a single weird gradient doesn't yank us around.</li>
+      <li><code>v[i] = b2*v[i] + (1-b2)*g*g</code> — same idea for the <em>squared</em> gradient.
+          <code>g*g</code> is always positive, so this tracks raw magnitude.</li>
+      <li><code>mh = m[i] / (1 - pow(b1, step+1))</code> and <code>vh</code> similarly —
+          <em>bias correction</em>. Both averages start at 0, so early on they read too low; this
+          division inflates them back to honest values during the first steps.</li>
+      <li><code>param.data -= lrt * mh / (sqrt(vh) + eps)</code> — the actual step. Notice we
+          divide the smoothed gradient <code>mh</code> by <code>sqrt(vh)</code>. A parameter with
+          big noisy gradients (large <code>vh</code>) gets a <em>smaller</em> effective step; a
+          calm parameter gets a larger one. <code>eps</code> (1e-8) just prevents divide-by-zero.</li>
+    </ul>
+  </div>
+
+  <div class="box info">
+    <strong>But why <code>beta1 = 0.85</code> and <code>beta2 = 0.99</code>?</strong>
+    <code>beta1</code> controls momentum — how much past gradients steer the current step. 0.85 means "keep
+    85% of the previous direction, mix in 15% of the new gradient," smoothing out jitter. <code>beta2</code>
+    controls the adaptive rate — how long a memory of gradient <em>magnitudes</em> to keep. 0.99 means "average
+    over a long history of how big this parameter's gradients have been." Both are close to the Adam paper's
+    defaults (0.9 and 0.999), nudged slightly for this small, fast-training model.
+  </div>
+
+  <div class="box tip">
+    <strong>The ball-on-a-hill analogy, completed</strong>
+    <span class="ball">&#127936;</span> <strong>Momentum</strong> = the ball keeps rolling the way
+    it was already going, so it powers through small bumps and flat patches.
+    <strong>Adaptive rate</strong> = the ball instinctively slows down on steep, treacherous slopes
+    and speeds up across gentle ones. Adam is gradient descent with both of those instincts bolted
+    on — which is why it's the default optimizer almost everywhere.
+  </div>
+
+  <div class="box tip">
+    <strong>Concrete example</strong>
+    <p>
+      <strong>Input:</strong> one parameter — say weight <code>p[42]</code> somewhere in the attention layer.
+    </p>
+    <ul style="margin:8px 0 0 18px">
+      <li>Current value: <code>0.05</code></li>
+      <li>Its gradient this step: <code>-0.003</code> (negative &rarr; loss <em>decreases</em> if we
+          <em>increase</em> this weight, so we should nudge it up)</li>
+      <li>Learning rate at step 500 of 1000: <code>0.01 &times; (1 - 500/1000) = 0.005</code></li>
+    </ul>
+    <p>
+      <strong>Output:</strong> the plain gradient-descent step is
+      <code>p -= lr &times; grad = 0.05 - 0.005 &times; (-0.003) = 0.050015</code> — an upward nudge of
+      <code>0.000015</code>. (Adam rescales the <em>magnitude</em> by normalizing the gradient against its own
+      running size, but the direction is the same: up.)
+    </p>
+    <p>
+      One weight barely twitches. But there are <strong>4,192</strong> of them, and the loop runs
+      <strong>1,000</strong> steps — about <strong>4.2 million</strong> tiny adjustments. That accumulation is
+      what turns a pile of random numbers into a name generator.
+    </p>
+  </div>
+
+  <h2>5. Learning-rate schedule — big steps first, fine steps last</h2>
+
+  <p>
+    There's one more refinement. Early in training the model is terrible and far from any good
+    answer — big steps are great, they cover ground fast. Late in training it's nearly right and
+    just needs gentle polishing — big steps would knock it back off target. So we <em>shrink</em>
+    the learning rate as training proceeds. Our code does a simple <strong>linear decay</strong>:
+  </p>
+
+  <pre><code class="language-java">            double lrt = lr * (1.0 - step / (double) nSteps);</code></pre>
+
+  <p>
+    At <code>step = 0</code> the factor <code>(1.0 - 0/1000)</code> is 1, so <code>lrt = 0.01</code>
+    — full size. At the final step the factor approaches 0, so <code>lrt</code> fades to nearly 0
+    — tiny, careful nudges. Smooth ramp from coarse to fine over the whole run.
+  </p>
+
+  <div class="box tip">
+    <strong>Real-life analogy</strong>
+    Learning-rate decay is landing a plane. At the start the pilot descends rapidly (high
+    learning rate — big parameter updates). As the runway approaches, the descent gets
+    gentler (lower learning rate — smaller, more precise adjustments). You don't want to
+    slam into the runway at full speed — that's overshooting the optimal parameters.
+  </div>
+
+  <div class="box info">
+    <strong>But why <em>linear</em> decay — why shrink the learning rate at all?</strong>
+    At the start, the model is far from any good solution, so big steps are fine and even helpful — they cover
+    ground fast. As training proceeds it gets close to a good answer, and big steps would overshoot and bounce
+    back off target. Linear decay smoothly trades one for the other: fast and coarse early, slow and precise
+    late. It's like driving fast on the open highway, then easing off as you roll into the parking spot.
+  </div>
+
+  <h3>Try it: watch the loss curve react</h3>
+  <p>
+    This is a <em>simulation</em> of gradient descent on a simple valley — but the maths is the
+    real thing (each step does <code>loss &larr; ideal + (1&minus;&alpha;)(loss&minus;ideal)</code>,
+    where &alpha; grows with the learning rate). Drag the slider and watch the curve change from a
+    slow crawl, to a clean descent, to wild oscillation, to outright divergence.
+  </p>
+
+  <div class="demo">
+    <div class="controls">
+      <label>Learning rate: <span id="lrVal">0.010</span></label>
+      <input type="range" id="lrSlider" min="0.005" max="0.25" step="0.005" value="0.01">
+    </div>
+    <canvas id="lrCanvas" width="560" height="240"></canvas>
+    <div class="output">Regime: <span id="lrRegime" class="regime"></span> &nbsp;·&nbsp; final loss: <span id="lrFinal"></span></div>
+    <div class="hint">The dashed line is the best achievable loss. Low rate = slow but safe; too high = the curve bounces or blows up.</div>
+  </div>
+
+  <h2>6. Putting it together — the complete training loop</h2>
+
+  <p>
+    Here is the entire learning process, exactly as it appears in <code>main()</code>. Everything
+    above lives inside this one loop:
+  </p>
+
+  <pre><code class="language-java">        for (int step = 0; step &lt; nSteps; step++) {
+            String doc = docs.get(step % docs.size());
+            List&lt;Integer&gt; tokens = new ArrayList&lt;&gt;();
+            tokens.add(BOS);
+            for (char c : doc.toCharArray())
+                tokens.add(uchars.indexOf(c));
+            tokens.add(BOS);
+
+            // Forward pass building the computation graph
+            int n = Math.min(blockSize,
+                             tokens.size() - 1);
+            List&lt;Value[]&gt;[] keys = new List[nLayer],
+                            vals = new List[nLayer];
+            for (int i = 0; i &lt; nLayer; i++) {
+                keys[i] = new ArrayList&lt;&gt;();
+                vals[i] = new ArrayList&lt;&gt;();
+            }
+
+            Value loss = Value.of(0);
+            for (int pos = 0; pos &lt; n; pos++) {
+                Value[] logits = gpt(tokens.get(pos),
+                                     pos, keys, vals);
+                Value[] probs = softmax(logits);
+                loss = loss.add(
+                    probs[tokens.get(pos + 1)]
+                        .log().neg());
+            }
+            loss = loss.div(Value.of(n));
+
+            // Backward pass for gradient computation
+            loss.backward();
+
+            // Adam parameter update with linear LR decay
+            double lrt = lr * (1.0 - step / (double) nSteps);
+            for (int i = 0; i &lt; params.size(); i++) {
+                double g = params.get(i).g();
+                m[i] = b1 * m[i] + (1 - b1) * g;
+                v[i] = b2 * v[i] + (1 - b2) * g * g;
+                double mh = m[i]
+                    / (1 - Math.pow(b1, step + 1)),
+                    vh = v[i]
+                    / (1 - Math.pow(b2, step + 1));
+                params.get(i).data[0] -=
+                    lrt * mh / (Math.sqrt(vh) + epsAdam);
+                params.get(i).grad[0] = 0;
+            }
+
+            System.out.printf(
+                "\rstep %4d/%4d | loss %.4f",
+                step + 1, nSteps, loss.d());
+        }</code></pre>
+
+  <ol class="loop-steps" style="margin-left:18px">
+    <li><strong>Pick a name</strong> — <code>docs.get(step % docs.size())</code> cycles through the
+        dataset.</li>
+    <li><strong>Tokenize</strong> — wrap the characters in <code>BOS</code> markers and convert each
+        letter to its integer id (Chapter 1).</li>
+    <li><strong>Forward pass</strong> — for every position, call <code>gpt(...)</code> to get logits,
+        <code>softmax</code> them to probabilities, and accumulate the cross-entropy
+        <code>loss</code> against the true next token.</li>
+    <li><strong>Backward pass</strong> — <code>loss.backward()</code> fills every
+        <code>.grad</code>.</li>
+    <li><strong>Update</strong> — the Adam block steps all 4,192 parameters downhill, then zeroes
+        their gradients ready for the next step.</li>
+  </ol>
+
+  <div class="box info">
+    <strong>But why reset the gradients to zero after each step (<code>grad[0] = 0</code>)?</strong>
+    Because <code>backward()</code> <em>accumulates</em> gradients (it does <code>+=</code>, not <code>=</code>).
+    If we never reset, step 2's gradients would still carry step 1's leftovers, step 3 would carry steps 1+2,
+    and so on. The model would end up optimizing for a tangled mixture of all past examples at once instead of
+    the current one. Zeroing after each update gives every step a clean slate — exactly the gradient for the
+    name we just looked at.
+  </div>
+
+  <div class="box info">
+    <strong>What you actually see when it runs</strong>
+    The printed loss starts near <strong>3.4</strong> (random guessing, ~log 27) and, over 1,000
+    steps, falls to roughly <strong>2.2</strong>. That drop is the model genuinely discovering the
+    statistical shape of human names — which letters follow which, how names tend to start and end
+    — purely from being corrected toward real examples. No rule about names was ever written down.
+    That fall <em>is</em> the learning.
+  </div>
+
+  <div class="box tip">
+    <strong>Before you move on</strong>
+    Four ideas to lock in: (1) <strong>loss</strong> = &minus;log(prob of correct token), small is
+    good; (2) <strong>backward()</strong> fills every gradient via the chain rule; (3) a gradient
+    points uphill, so we step the <em>opposite</em> way; (4) <strong>Adam</strong> adds momentum and
+    per-parameter step sizing, and a decaying learning rate goes coarse&rarr;fine. Next we read the
+    <em>entire</em> 300-line program top to bottom.
+  </div>
+  <div class="page-nav"></div>
+</main>
+<script>
+(function(){
+  // ---------- Cross-entropy bar demo ----------
+  var cv = document.getElementById('ceCanvas'), cx = cv.getContext('2d');
+  var N = 27, correct = 0; // 'a'
+  var labels = []; for (var i=0;i<26;i++) labels.push(String.fromCharCode(97+i)); labels.push('BOS');
+  var raw = []; for (var i=0;i<N;i++) raw.push(0.35); raw[correct] = 1.6;
+  var dragging = false;
+
+  function probs(){
+    var s = 0; for (var i=0;i<N;i++) s += raw[i];
+    return raw.map(function(r){ return r/s; });
+  }
+  function draw(){
+    var W = cv.width, H = cv.height, pad = 22;
+    cx.clearRect(0,0,W,H);
+    var p = probs();
+    var maxP = Math.max.apply(null, p);
+    var bw = (W - pad*2) / N;
+    for (var i=0;i<N;i++){
+      var h = (p[i]/maxP) * (H - pad*2);
+      var x = pad + i*bw, y = H - pad - h;
+      cx.fillStyle = (i===correct) ? '#2ecc71' : '#9aa6e8';
+      cx.fillRect(x+1, y, bw-2, h);
+      cx.fillStyle = '#666'; cx.font = '9px monospace'; cx.textAlign='center';
+      cx.fillText(labels[i], x+bw/2, H - pad + 11);
+    }
+    cx.strokeStyle = '#ddd'; cx.beginPath();
+    cx.moveTo(pad, H-pad); cx.lineTo(W-pad, H-pad); cx.stroke();
+    var pc = p[correct], loss = -Math.log(pc);
+    document.getElementById('ceOut').innerHTML =
+      "P('a') = <b style='color:#2ecc71'>" + (pc*100).toFixed(1) + "%</b>" +
+      " &nbsp;&rarr;&nbsp; loss = &minus;ln(" + pc.toFixed(3) + ") = <b>" + loss.toFixed(2) + "</b>";
+  }
+  function setFromEvent(e){
+    var rect = cv.getBoundingClientRect();
+    var sx = cv.width/rect.width, sy = cv.height/rect.height;
+    var mx = (e.clientX - rect.left)*sx, my = (e.clientY - rect.top)*sy;
+    var pad = 22, bw = (cv.width - pad*2)/N;
+    var idx = Math.floor((mx - pad)/bw);
+    if (idx < 0 || idx >= N) return;
+    var frac = 1 - (my - pad)/(cv.height - pad*2);
+    frac = Math.max(0.01, Math.min(1, frac));
+    raw[idx] = frac * 4;
+    draw();
+  }
+  cv.addEventListener('pointerdown', function(e){ dragging = true; setFromEvent(e); });
+  cv.addEventListener('pointermove', function(e){ if (dragging) setFromEvent(e); });
+  window.addEventListener('pointerup', function(){ dragging = false; });
+  draw();
+
+  // ---------- Learning-rate simulation ----------
+  var lc = document.getElementById('lrCanvas'), lx = lc.getContext('2d');
+  var slider = document.getElementById('lrSlider');
+  var K = 10, ideal = 2.1, start = 3.3, STEPS = 120, CAP = 6;
+  function simulate(lr){
+    var a = lr*K, loss = start, arr = [];
+    for (var t=0;t<STEPS;t++){
+      loss = ideal + (1-a)*(loss-ideal);
+      arr.push(loss);
+    }
+    return arr;
+  }
+  function drawLR(){
+    var lr = parseFloat(slider.value);
+    document.getElementById('lrVal').textContent = lr.toFixed(3);
+    var a = lr*K;
+    var arr = simulate(lr);
+    var W = lc.width, H = lc.height, pad = 26;
+    lx.clearRect(0,0,W,H);
+    // dashed ideal line
+    var yI = H - pad - (ideal/CAP)*(H-pad*2);
+    lx.strokeStyle = '#bbb'; lx.setLineDash([5,4]); lx.beginPath();
+    lx.moveTo(pad, yI); lx.lineTo(W-pad, yI); lx.stroke(); lx.setLineDash([]);
+    lx.fillStyle='#999'; lx.font='10px monospace'; lx.textAlign='left';
+    lx.fillText('best (2.1)', pad+2, yI-4);
+    // axes
+    lx.strokeStyle='#ddd'; lx.beginPath();
+    lx.moveTo(pad,pad); lx.lineTo(pad,H-pad); lx.lineTo(W-pad,H-pad); lx.stroke();
+    // curve
+    lx.strokeStyle = '#4361ee'; lx.lineWidth = 2; lx.beginPath();
+    var diverged = false;
+    for (var t=0;t<STEPS;t++){
+      var v = arr[t]; if (!isFinite(v) || v > CAP){ v = CAP; diverged = true; }
+      if (v < 0) v = 0;
+      var x = pad + (t/(STEPS-1))*(W-pad*2);
+      var y = H - pad - (v/CAP)*(H-pad*2);
+      if (t===0) lx.moveTo(x,y); else lx.lineTo(x,y);
+    }
+    lx.stroke(); lx.lineWidth = 1;
+    var regime, color, finalTxt;
+    var last = arr[STEPS-1];
+    if (a > 2 || diverged){ regime='diverging — loss explodes'; color='#e74c3c'; finalTxt='&infin;'; }
+    else if (a > 1.6){ regime='overshooting — bounces before settling'; color='#e67e22'; finalTxt=last.toFixed(2); }
+    else if (a < 0.25){ regime='too slow — barely moves'; color='#9b59b6'; finalTxt=last.toFixed(2); }
+    else { regime='healthy — smooth descent'; color='#2ecc71'; finalTxt=last.toFixed(2); }
+    var rEl = document.getElementById('lrRegime'); rEl.textContent = regime; rEl.style.color = color;
+    document.getElementById('lrFinal').innerHTML = finalTxt;
+  }
+  slider.addEventListener('input', drawLR);
+  drawLR();
+})();
+</script>
+<script src="../js/nav.js"></script>
+<script src="../js/highlight.js"></script>
+</body>
+</html>

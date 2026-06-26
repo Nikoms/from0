@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Probabilities &amp; Softmax — MicroGPT Course</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<button id="hamburger">&#9776;</button>
+<nav id="sidebar"></nav>
+<div class="progress-bar"><div class="fill"></div></div>
+<main id="content">
+
+  <h1>Probabilities &amp; Softmax</h1>
+  <p class="subtitle">
+    <span class="difficulty intermediate">Intermediate</span>
+    &nbsp; How the model turns 27 raw numbers into a confident guess about the next character — plus the handful of math functions that make it work.
+  </p>
+
+  <div class="box info">
+    <strong>Why this chapter exists</strong>
+    A GPT's final act is always the same: <em>choose the next token</em>. To choose, it needs <em>probabilities</em> — a list of "how likely is each option", all positive, all summing to 1. The model doesn't produce those directly; it produces raw scores. <strong>Softmax</strong> is the function that converts scores into probabilities, and it's built from <code>exp()</code> and <code>log()</code>. We'll build all of it from the ground up.
+  </div>
+
+  <h2>What Is a Probability?</h2>
+  <p>
+    A probability is just a number between <strong>0</strong> and <strong>1</strong> that answers "how likely is this?"
+  </p>
+  <ul>
+    <li><strong>0</strong> means impossible (it never happens).</li>
+    <li><strong>1</strong> means certain (it always happens).</li>
+    <li><strong>0.5</strong> means a fifty-fifty coin flip.</li>
+  </ul>
+  <p>
+    There's one iron rule. If you list the probabilities of <em>every possible outcome</em>, they must add up to exactly <strong>1</strong>. Something has to happen, and the total "likelihood" of all options together is 100%.
+  </p>
+  <div class="box tip">
+    <strong>Dice example</strong>
+    A fair six-sided die has six outcomes, each equally likely. So each face has probability <code>1/6 &asymp; 0.167</code>. Check the rule: <code>6 &times; 1/6 = 1</code>. ✓ A loaded die might be <code>[0.5, 0.1, 0.1, 0.1, 0.1, 0.1]</code> — still sums to 1, just lopsided toward rolling a one.
+  </div>
+  <p>
+    Our GPT faces the same setup, but with 27 outcomes instead of 6: at every step it must say "here's how likely each of the 27 characters is to come next," and those 27 numbers have to sum to 1.
+  </p>
+
+  <h2>The Model's Output Problem</h2>
+  <p>
+    Here's the catch. The neural network does <em>not</em> hand us neat probabilities. After all its matrix math, it spits out <strong>27 raw numbers</strong> — one per character in the vocabulary. These raw scores are called <strong>logits</strong>.
+  </p>
+  <p>A logit can be <em>anything</em>: large, small, negative. A typical batch might look like:</p>
+  <div class="math-block">
+    logits = [ &minus;3.2, &nbsp;0.5, &nbsp;7.1, &nbsp;&minus;1.0, &nbsp;2.3, &hellip; ]&nbsp;&nbsp;<span style="color:#888">(27 of them)</span>
+  </div>
+  <p>
+    A bigger logit means "I lean toward this character." But you can't use these directly as probabilities — some are negative (a probability can't be negative), and they don't sum to 1. We need a converter with two strict requirements:
+  </p>
+  <div class="columns">
+    <div class="col">
+      <h4>Requirement 1</h4>
+      <p>Every output must be <strong>positive</strong> (≥ 0). No negative probabilities allowed.</p>
+    </div>
+    <div class="col">
+      <h4>Requirement 2</h4>
+      <p>The outputs must <strong>sum to exactly 1</strong>, so they form a valid distribution over the 27 characters.</p>
+    </div>
+  </div>
+  <p>The function that does both, while preserving the ranking (bigger logit → bigger probability), is <strong>softmax</strong>.</p>
+
+  <div class="box info">
+    <strong>But why softmax — why not just divide each number by the sum?</strong>
+    Because logits can be <em>negative</em>, and you can't have negative probabilities. If the scores were <code>[5, &minus;3, 2]</code>, dividing each by their sum (4) would hand the middle option a probability of <code>&minus;0.75</code> — nonsense. <code>exp()</code> is the fix: it turns <em>any</em> number, negative or not, into a positive one <em>first</em>, and only then do we divide by the sum. That extra exponentiation step is the entire reason softmax exists instead of plain division.
+  </div>
+
+  <h2>Softmax, Step by Step</h2>
+  <p>
+    Let's walk through softmax with three numbers instead of 27, so we can do every step by hand. Start with these logits:
+  </p>
+  <div class="math-block">logits = [ 2.0, 1.0, 0.1 ]</div>
+
+  <p><strong>Step 1 — Find the max.</strong> The largest is <code>2.0</code>. We'll subtract it from every value. (This step is purely for numerical safety; it doesn't change the final answer — more on why below.)</p>
+
+  <p><strong>Step 2 — Subtract the max from each.</strong></p>
+  <div class="math-block">[ 2.0&minus;2.0, &nbsp;1.0&minus;2.0, &nbsp;0.1&minus;2.0 ] = [ 0, &minus;1.0, &minus;1.9 ]</div>
+
+  <p><strong>Step 3 — Apply <code>exp()</code> to each.</strong> <code>exp(x)</code> raises the constant <code>e &asymp; 2.718</code> to the power <code>x</code>. Its job here is to make everything positive (Requirement 1).</p>
+  <div class="math-block">[ exp(0), &nbsp;exp(&minus;1.0), &nbsp;exp(&minus;1.9) ] &asymp; [ 1.00, &nbsp;0.37, &nbsp;0.15 ]</div>
+
+  <p><strong>Step 4 — Sum them up.</strong></p>
+  <div class="math-block">1.00 + 0.37 + 0.15 = 1.52</div>
+
+  <p><strong>Step 5 — Divide each by the sum.</strong> This forces the total to 1 (Requirement 2).</p>
+  <div class="math-block">[ 1.00/1.52, &nbsp;0.37/1.52, &nbsp;0.15/1.52 ] &asymp; [ 0.66, &nbsp;0.24, &nbsp;0.10 ]</div>
+
+  <p><strong>Step 6 — Done.</strong> The result <code>[0.66, 0.24, 0.10]</code> is a valid probability distribution: all positive, and <code>0.66 + 0.24 + 0.10 = 1.0</code>. ✓ The first option was the biggest logit, and it got the biggest probability — order preserved.</p>
+
+  <div class="box info">
+    <strong>The whole formula in one line</strong>
+    For each item <code>i</code>: &nbsp; <code>softmax(x)<sub>i</sub> = exp(x<sub>i</sub>) / Σ exp(x<sub>j</sub>)</code>. &nbsp; In words: "exponentiate everything, then normalize so it sums to 1." That's the entire idea.
+  </div>
+
+  <div class="box tip">
+    <strong>Real-life analogy</strong>
+    Softmax is an election. Four candidates get raw votes <code>[200, 100, 50, 10]</code>;
+    softmax converts them to vote shares <code>[55%, 28%, 14%, 3%]</code> — the winner
+    stands out more clearly, and the total adds up to 100%. The <em>temperature</em>
+    dial you'll meet later in this chapter is like adjusting how much the front-runner
+    dominates: low temperature = landslide victory, high temperature = a tight race
+    where the underdogs still have a shot.
+  </div>
+
+  <div class="box tip">
+    <strong>Concrete example</strong>
+    <p><strong>Input logits</strong> (raw scores for 4 candidate next characters):
+    <code>[2.0, 1.0, 0.1, &minus;1.0]</code></p>
+    <p><strong>After exp()</strong> (everything now positive):
+    <code>[7.39, 2.72, 1.11, 0.37]</code></p>
+    <p><strong>Sum:</strong> <code>7.39 + 2.72 + 1.11 + 0.37 = 11.58</code></p>
+    <p><strong>Divide each by the sum</strong> &rarr; probabilities:
+    <code>[0.64, 0.23, 0.10, 0.03]</code></p>
+    <p>These sum to 1.0, and the model is 64% confident in the first character. Notice
+    the logit gap of just 1.0 (between 2.0 and 1.0) became a probability gap of 0.64 vs
+    0.23 — <code>exp</code> magnifies the lead.</p>
+  </div>
+
+  <p>Here's the actual Java from our GPT — read it next to the six steps above:</p>
+  <pre><code class="language-java">static Value[] softmax(Value[] logits) {
+    int n = logits.length;
+
+    // Step 1: find the max logit (for numerical stability)
+    Value max = logits[0];
+    for (int i = 1; i &lt; n; i++)
+        if (logits[i].data &gt; max.data) max = logits[i];
+
+    // Steps 2 + 3: subtract max, then exp() each
+    Value[] exps = new Value[n];
+    Value sum = new Value(0.0);
+    for (int i = 0; i &lt; n; i++) {
+        exps[i] = logits[i].sub(max).exp();  // exp(logit - max)
+        sum = sum.add(exps[i]);              // Step 4: running total
+    }
+
+    // Step 5: divide each by the sum → probabilities
+    Value[] probs = new Value[n];
+    for (int i = 0; i &lt; n; i++)
+        probs[i] = exps[i].div(sum);
+
+    return probs;  // all positive, sum to 1
+}</code></pre>
+
+  <div class="demo">
+    <h4>Demo 1 — Softmax live</h4>
+    <p style="font-size:.9em;color:#555;margin-bottom:10px;">Drag the three logit sliders. The bars show the resulting probabilities (they always sum to 1). Watch how a single large logit grabs most of the probability.</p>
+    <div class="controls">
+      <label>logit A <input type="range" id="lgA" min="-5" max="8" step="0.1" value="2.0"></label>
+      <label>logit B <input type="range" id="lgB" min="-5" max="8" step="0.1" value="1.0"></label>
+      <label>logit C <input type="range" id="lgC" min="-5" max="8" step="0.1" value="0.1"></label>
+    </div>
+    <canvas id="smCanvas" width="760" height="240"></canvas>
+    <div class="output" id="smOut"></div>
+  </div>
+
+  <h2>What Is <code>exp()</code>, and Why Use It?</h2>
+  <p>
+    <code>exp(x)</code> means <code>e<sup>x</sup></code>, where <code>e &asymp; 2.71828</code> is a special mathematical constant (like π, it shows up everywhere in nature and math). You don't need to know <em>why</em> <code>e</code> is special — you need two facts about <code>exp</code>:
+  </p>
+  <ul>
+    <li><strong>It is always positive.</strong> No matter what you feed it — huge, tiny, negative — the output is greater than 0. <code>exp(-1000)</code> is a microscopic positive number; <code>exp(-anything)</code> never goes negative. This is exactly what makes it perfect for Requirement 1.</li>
+    <li><strong>It grows explosively.</strong> Small increases in <code>x</code> cause large jumps in <code>exp(x)</code>. <code>exp(1)&asymp;2.7</code>, <code>exp(3)&asymp;20</code>, <code>exp(7)&asymp;1097</code>. This is why one clearly-largest logit can dominate the probabilities — exponentiation magnifies the lead.</li>
+  </ul>
+
+  <div class="demo">
+    <h4>Demo 2 — The exp(x) curve</h4>
+    <p style="font-size:.9em;color:#555;margin-bottom:10px;">Notice the curve is <em>always above zero</em> (always positive) and shoots upward fast on the right. The dot marks exp at the value you choose.</p>
+    <div class="controls">
+      <label>x = <input type="range" id="expX" min="-3" max="4" step="0.1" value="1.0"></label>
+      <span id="expVal" style="font-family:monospace;"></span>
+    </div>
+    <canvas id="expCanvas" width="760" height="280"></canvas>
+  </div>
+
+  <div class="box tip">
+    <strong>Back to Step 1: why subtract the max?</strong>
+    Because <code>exp</code> grows so fast, <code>exp(1000)</code> overflows to infinity on a real computer and the math breaks. Subtracting the max means the biggest input to <code>exp</code> is always <code>0</code> (and <code>exp(0)=1</code>), so nothing ever blows up. Since we subtract the <em>same</em> number from every logit, the ratios — and therefore the final probabilities — are unchanged. It's a free safety net.
+  </div>
+
+  <h2>What Is <code>log()</code>?</h2>
+  <p>
+    <code>log()</code> is the <strong>inverse</strong> of <code>exp()</code>. It undoes exponentiation: <code>log(exp(x)) = x</code>. If <code>exp</code> answers "what is <code>e</code> to the power x?", then <code>log</code> answers "what power do I raise <code>e</code> to, to get this number?"
+  </p>
+  <p>Two facts to anchor it:</p>
+  <ul>
+    <li><code>log(1) = 0</code> — because <code>e<sup>0</sup> = 1</code>.</li>
+    <li><code>log(x) is negative</code> for any <code>x</code> between 0 and 1. For example <code>log(0.5) &asymp; &minus;0.69</code>, and <code>log(0.01) &asymp; &minus;4.6</code>. The closer to 0, the more steeply negative.</li>
+  </ul>
+  <div class="box info">
+    <strong>But why use <code>log</code> in the loss at all?</strong>
+    Two beautiful properties. First, <code>log(1) = 0</code> and <code>log(0) → &minus;∞</code>: a perfect prediction earns exactly zero loss, while a hopeless one earns an unbounded penalty — precisely the shape we want. Second, <code>log</code> turns <em>products into sums</em>: <code>log(a&times;b) = log(a) + log(b)</code>. A whole name's probability is the product of many tiny per-character probabilities, and multiplying lots of small numbers underflows to zero on a real computer. Adding their logs instead keeps the math stable. The leading minus sign just flips log's negatives into positive penalties.
+  </div>
+  <p>
+    This matters because of how the model measures its mistakes. During training we use the <strong>loss</strong> function <code>&minus;log(probability of the correct character)</code>. Read it slowly:
+  </p>
+  <div class="math-block">loss = &minus;log( p<sub>correct</sub> )</div>
+  <ul>
+    <li>If the model put a <strong>high</strong> probability on the right answer (say <code>p = 0.95</code>), then <code>&minus;log(0.95) &asymp; 0.05</code> — a tiny loss. Good prediction, small penalty.</li>
+    <li>If it put a <strong>low</strong> probability on the right answer (say <code>p = 0.01</code>), then <code>&minus;log(0.01) &asymp; 4.6</code> — a big loss. The model was confidently wrong, so it's punished hard.</li>
+  </ul>
+  <div class="box info">
+    <strong>The intuition</strong>
+    The minus sign flips <code>log</code>'s negatives into positive penalties. Being almost-certain about the wrong answer is far worse than being merely unsure — and <code>&minus;log</code> captures exactly that, with the penalty rocketing toward infinity as <code>p</code> approaches 0. This shape is what pushes the model to assign real confidence to correct answers.
+  </div>
+
+  <div class="box tip">
+    <strong>Concrete example</strong>
+    <p>Reusing the probabilities <code>[0.64, 0.23, 0.10, 0.03]</code> from the softmax
+    example above:</p>
+    <p><strong>If the correct next character was index 0</strong> (the model's top pick):
+    <code>loss = &minus;log(0.64) = 0.45</code> — low loss, good prediction.</p>
+    <p><strong>If the correct next character was index 3</strong> (the model's
+    least-favored): <code>loss = &minus;log(0.03) = 3.51</code> — high loss. The model put
+    only 3% on the right answer, so it's punished hard.</p>
+    <p>Same prediction, wildly different loss — the loss depends entirely on how much
+    probability landed on the <em>correct</em> answer.</p>
+  </div>
+
+  <div class="demo">
+    <h4>Demo 3 — Loss as &minus;log(p)</h4>
+    <p style="font-size:.9em;color:#555;margin-bottom:10px;">Slide the probability the model gave to the correct character. See the loss explode as that probability drops toward zero, and fall to nearly nothing as it approaches 1.</p>
+    <div class="controls">
+      <label>p(correct) = <input type="range" id="lossP" min="0.01" max="1" step="0.01" value="0.5"></label>
+      <span id="lossVal" style="font-family:monospace;"></span>
+    </div>
+    <canvas id="lossCanvas" width="760" height="280"></canvas>
+  </div>
+
+  <h2>The Gaussian (Normal) Distribution</h2>
+  <p>
+    Switch gears to a different piece of math the model uses: the <strong>Gaussian</strong>, better known as the <strong>bell curve</strong>. It describes a very common pattern in nature: most values cluster around an average, and extreme values get rarer the further out you go. Human heights, measurement errors, exam scores — all roughly bell-shaped.
+  </p>
+  <p>Two numbers fully describe a Gaussian:</p>
+  <ul>
+    <li><strong>Mean</strong> (μ) — the center, where the peak sits.</li>
+    <li><strong>Standard deviation</strong> (σ) — the spread. Small σ = a tall, narrow spike; large σ = a wide, flat hill. Roughly 68% of all samples land within one σ of the mean.</li>
+  </ul>
+
+  <div class="box tip">
+    <strong>Real-life analogy</strong>
+    A Gaussian is dart throwing. Aim for the bullseye and most darts land near the
+    center, fewer land further out, and hardly any reach the edge of the board. That
+    bell-shaped pattern of where they land <em>is</em> a Gaussian distribution. When we
+    initialize the model's parameters with Gaussian random values, we're saying "start
+    with small values centered around zero, with just a few that land slightly larger."
+  </div>
+
+  <p>Why does our GPT care? Look at how it creates its starting parameters:</p>
+  <pre><code class="language-java">// Each parameter starts as a small random number,
+// drawn from a Gaussian centered at 0
+double value = rng.nextGaussian() * 0.08;</code></pre>
+  <p>
+    <code>rng.nextGaussian()</code> returns a random number from a bell curve with mean <code>0</code> and standard deviation <code>1</code>. Multiplying by <code>0.08</code> shrinks the spread, so the parameters come out centered at <code>0</code> and almost all fall between roughly <code>&minus;0.16</code> and <code>+0.16</code> (that's ±2σ). In other words: <em>small random numbers, mostly near zero.</em>
+  </p>
+  <div class="box warn">
+    <strong>Why small, why random?</strong>
+    <em>Random</em> so that different parameters start out different — if they were all identical the model couldn't tell them apart and would never learn. <em>Small</em> because the network multiplies these numbers together through many layers: start too big and the values explode toward infinity; start too small and the signal fades to nothing. <code>0.08</code> is a tuned sweet spot that keeps the early math stable.
+  </div>
+
+  <div class="demo">
+    <h4>Demo 4 — Gaussian samples</h4>
+    <p style="font-size:.9em;color:#555;margin-bottom:10px;">Draw 200 random samples from a bell curve and bin them into a histogram. Adjust the mean (center) and standard deviation (spread), then redraw to see the shape shift.</p>
+    <div class="controls">
+      <label>mean <input type="range" id="gMean" min="-3" max="3" step="0.1" value="0"></label>
+      <label>std dev <input type="range" id="gStd" min="0.2" max="2.5" step="0.1" value="1"></label>
+      <button id="gDraw">Draw 200 samples</button>
+    </div>
+    <canvas id="gCanvas" width="760" height="280"></canvas>
+    <div class="output" id="gOut"></div>
+  </div>
+
+  <h2>Temperature: Tuning the Confidence</h2>
+  <p>
+    Back to softmax — but now at <em>inference</em> time, when the trained model is actually generating new names. We get one extra dial called <strong>temperature</strong>. Before softmax, we divide every logit by it:
+  </p>
+  <div class="math-block">probs = softmax( logits / temperature )</div>
+  <p>That single division reshapes how bold or timid the model's choices are:</p>
+  <div class="columns">
+    <div class="col">
+      <h4>Low (e.g. 0.1)</h4>
+      <p>Dividing by a small number <em>magnifies</em> the gaps between logits. Softmax then becomes extreme — one character grabs nearly all the probability. Output is <strong>safe and repetitive</strong>; the model always picks its top guess.</p>
+    </div>
+    <div class="col">
+      <h4>High (e.g. 2.0)</h4>
+      <p>Dividing by a big number <em>squashes</em> the gaps. The probabilities flatten toward equal, so unlikely characters get a real shot. Output is <strong>random and surprising</strong> — creative, sometimes nonsense.</p>
+    </div>
+  </div>
+  <div class="box tip">
+    <strong>Temperature = 1.0 changes nothing</strong>
+    Dividing by 1 leaves the logits untouched, so you get plain softmax. Think of temperature as a creativity knob: turn it down for predictable, turn it up for wild. The name is a physics analogy — "hot" systems jiggle around randomly, "cold" ones settle into one state.
+  </div>
+
+  <div class="demo">
+    <h4>Demo 5 — Softmax with temperature</h4>
+    <p style="font-size:.9em;color:#555;margin-bottom:10px;">Same three logits, fixed this time. Only the temperature moves. Watch the bars go spiky when cold and flat when hot.</p>
+    <div class="controls">
+      <label>temperature = <input type="range" id="tmpT" min="0.1" max="2.5" step="0.05" value="1.0"></label>
+      <span id="tmpVal" style="font-family:monospace;"></span>
+    </div>
+    <canvas id="tmpCanvas" width="760" height="240"></canvas>
+    <div class="output" id="tmpOut"></div>
+  </div>
+
+  <h2>Recap</h2>
+  <ul>
+    <li>A <strong>probability</strong> is a number in [0, 1]; a full set of them must sum to 1.</li>
+    <li>The model outputs raw <strong>logits</strong> (any value). <strong>Softmax</strong> converts them to probabilities: <code>exp</code> everything, then divide by the sum.</li>
+    <li><code>exp(x)</code> is always positive and grows fast — that's why it enforces "all positive" and lets a strong logit dominate. Subtracting the max first keeps it from overflowing.</li>
+    <li><code>log(x)</code> is the inverse of <code>exp</code>; <code>&minus;log(p_correct)</code> is the training <strong>loss</strong> — tiny when the model is right and confident, huge when it's confidently wrong.</li>
+    <li>The <strong>Gaussian</strong> bell curve seeds the model's parameters with small random values near 0 (<code>nextGaussian() * 0.08</code>) so training starts stable.</li>
+    <li><strong>Temperature</strong> divides the logits before softmax: low = sharp and predictable, high = flat and creative, 1.0 = unchanged.</li>
+  </ul>
+
+  <div class="box info">
+    <strong>Next up</strong>
+    We've handled the model's <em>output</em> end. Next we go to the engine that lets it <em>learn</em>: automatic differentiation — how the <code>Value</code> class quietly tracks the gradient of every number. That's Chapter 5.
+  </div>
+
+  <div class="page-nav"></div>
+</main>
+
+<script src="../js/nav.js"></script>
+<script src="../js/highlight.js"></script>
+
+<script>
+// ── Shared helpers ──
+function softmax(logits, temp) {
+  temp = temp || 1;
+  const t = logits.map(v => v / temp);
+  const m = Math.max(...t);
+  const ex = t.map(v => Math.exp(v - m));
+  const s = ex.reduce((a, b) => a + b, 0);
+  return ex.map(v => v / s);
+}
+
+// ─────────────────────────────────────────────────────────
+// DEMO 1 — Softmax live (3 sliders)
+// ─────────────────────────────────────────────────────────
+(function () {
+  const A = document.getElementById('lgA'), B = document.getElementById('lgB'), C = document.getElementById('lgC');
+  const cv = document.getElementById('smCanvas'), out = document.getElementById('smOut');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const labels = ['A', 'B', 'C'];
+  const colors = ['#4361ee', '#9b59b6', '#2ecc71'];
+
+  function draw() {
+    const logits = [+A.value, +B.value, +C.value];
+    const probs = softmax(logits, 1);
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    const baseY = 190, maxH = 150, bw = 150, gap = 90;
+    const startX = (cv.width - (bw * 3 + gap * 2)) / 2;
+    // axis
+    ctx.strokeStyle = '#ccc';
+    ctx.beginPath(); ctx.moveTo(40, baseY); ctx.lineTo(cv.width - 20, baseY); ctx.stroke();
+    ctx.fillStyle = '#999'; ctx.font = '11px monospace'; ctx.textAlign = 'right';
+    ctx.fillText('1.0', 36, baseY - maxH + 4);
+    ctx.fillText('0.5', 36, baseY - maxH / 2 + 4);
+    ctx.fillText('0', 36, baseY + 4);
+    probs.forEach((p, i) => {
+      const x = startX + i * (bw + gap);
+      const h = p * maxH;
+      ctx.fillStyle = colors[i];
+      ctx.fillRect(x, baseY - h, bw, h);
+      ctx.fillStyle = '#1a1a2e';
+      ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText((p * 100).toFixed(1) + '%', x + bw / 2, baseY - h - 8);
+      ctx.fillStyle = '#555'; ctx.font = '12px monospace';
+      ctx.fillText('logit ' + labels[i] + ' = ' + logits[i].toFixed(1), x + bw / 2, baseY + 20);
+    });
+    out.textContent =
+      'probabilities = [' + probs.map(p => p.toFixed(3)).join(', ') + ']' +
+      '   (sum = ' + probs.reduce((a, b) => a + b, 0).toFixed(3) + ')';
+  }
+  [A, B, C].forEach(s => s.addEventListener('input', draw));
+  draw();
+})();
+
+// ─────────────────────────────────────────────────────────
+// DEMO 2 — exp(x) curve
+// ─────────────────────────────────────────────────────────
+(function () {
+  const X = document.getElementById('expX'), val = document.getElementById('expVal');
+  const cv = document.getElementById('expCanvas');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const xMin = -3, xMax = 4, yMin = 0, yMax = 30;
+  const PAD = 40;
+  const px = x => PAD + (x - xMin) / (xMax - xMin) * (cv.width - 2 * PAD);
+  const py = y => (cv.height - PAD) - (y - yMin) / (yMax - yMin) * (cv.height - 2 * PAD);
+
+  function draw() {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    // grid + axes
+    ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+    for (let gx = xMin; gx <= xMax; gx++) {
+      ctx.beginPath(); ctx.moveTo(px(gx), py(yMin)); ctx.lineTo(px(gx), py(yMax)); ctx.stroke();
+    }
+    for (let gy = 0; gy <= yMax; gy += 5) {
+      ctx.beginPath(); ctx.moveTo(px(xMin), py(gy)); ctx.lineTo(px(xMax), py(gy)); ctx.stroke();
+    }
+    // zero axis
+    ctx.strokeStyle = '#bbb'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(px(0), py(yMin)); ctx.lineTo(px(0), py(yMax)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px(xMin), py(0)); ctx.lineTo(px(xMax), py(0)); ctx.stroke();
+    // labels
+    ctx.fillStyle = '#999'; ctx.font = '11px monospace'; ctx.textAlign = 'center';
+    for (let gx = xMin; gx <= xMax; gx++) ctx.fillText(gx, px(gx), py(0) + 16);
+    ctx.textAlign = 'right';
+    for (let gy = 0; gy <= yMax; gy += 10) ctx.fillText(gy, px(xMin) - 6, py(gy) + 4);
+    // curve
+    ctx.strokeStyle = '#4361ee'; ctx.lineWidth = 2.5; ctx.beginPath();
+    let first = true;
+    for (let x = xMin; x <= xMax; x += 0.02) {
+      const y = Math.exp(x);
+      const yy = Math.min(y, yMax + 5);
+      if (first) { ctx.moveTo(px(x), py(yy)); first = false; }
+      else ctx.lineTo(px(x), py(yy));
+    }
+    ctx.stroke();
+    // marker
+    const xv = +X.value, yv = Math.exp(xv);
+    ctx.fillStyle = '#e67e22';
+    ctx.beginPath(); ctx.arc(px(xv), py(Math.min(yv, yMax)), 6, 0, Math.PI * 2); ctx.fill();
+    val.textContent = 'exp(' + xv.toFixed(1) + ') = ' + yv.toFixed(3) + '   (always > 0)';
+  }
+  X.addEventListener('input', draw);
+  draw();
+})();
+
+// ─────────────────────────────────────────────────────────
+// DEMO 3 — loss = -log(p)
+// ─────────────────────────────────────────────────────────
+(function () {
+  const P = document.getElementById('lossP'), val = document.getElementById('lossVal');
+  const cv = document.getElementById('lossCanvas');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const yMax = 5, PAD = 44;
+  const px = p => PAD + p * (cv.width - 2 * PAD);
+  const py = y => (cv.height - PAD) - Math.min(y, yMax) / yMax * (cv.height - 2 * PAD);
+
+  function draw() {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.strokeStyle = '#eee';
+    for (let g = 0; g <= 10; g++) { ctx.beginPath(); ctx.moveTo(px(g/10), py(0)); ctx.lineTo(px(g/10), py(yMax)); ctx.stroke(); }
+    for (let g = 0; g <= yMax; g++) { ctx.beginPath(); ctx.moveTo(px(0), py(g)); ctx.lineTo(px(1), py(g)); ctx.stroke(); }
+    // axes labels
+    ctx.fillStyle = '#999'; ctx.font = '11px monospace'; ctx.textAlign = 'center';
+    for (let g = 0; g <= 10; g += 2) ctx.fillText((g/10).toFixed(1), px(g/10), py(0) + 16);
+    ctx.textAlign = 'right';
+    for (let g = 0; g <= yMax; g++) ctx.fillText(g, px(0) - 6, py(g) + 4);
+    ctx.fillText('loss', px(0) - 6, py(yMax) - 8);
+    ctx.textAlign = 'center';
+    ctx.fillText('p(correct)', cv.width / 2, cv.height - 10);
+    // curve
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2.5; ctx.beginPath();
+    let first = true;
+    for (let p = 0.005; p <= 1; p += 0.002) {
+      const y = -Math.log(p);
+      if (first) { ctx.moveTo(px(p), py(y)); first = false; }
+      else ctx.lineTo(px(p), py(y));
+    }
+    ctx.stroke();
+    // marker
+    const pv = +P.value, loss = -Math.log(pv);
+    ctx.fillStyle = '#4361ee';
+    ctx.beginPath(); ctx.arc(px(pv), py(loss), 6, 0, Math.PI * 2); ctx.fill();
+    let verdict = loss < 0.3 ? 'low loss — good prediction' : loss < 1.5 ? 'moderate loss' : 'high loss — confidently wrong';
+    val.textContent = '−log(' + pv.toFixed(2) + ') = ' + loss.toFixed(3) + '   (' + verdict + ')';
+  }
+  P.addEventListener('input', draw);
+  draw();
+})();
+
+// ─────────────────────────────────────────────────────────
+// DEMO 4 — Gaussian histogram
+// ─────────────────────────────────────────────────────────
+(function () {
+  const M = document.getElementById('gMean'), S = document.getElementById('gStd');
+  const btn = document.getElementById('gDraw');
+  const cv = document.getElementById('gCanvas'), out = document.getElementById('gOut');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+
+  // Box-Muller transform → standard normal sample
+  function gauss() {
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function draw() {
+    const mean = +M.value, std = +S.value, N = 200;
+    const samples = Array.from({ length: N }, () => mean + gauss() * std);
+    // bins from -5 to 5
+    const lo = -5, hi = 5, bins = 40, bw = (hi - lo) / bins;
+    const counts = new Array(bins).fill(0);
+    samples.forEach(x => {
+      const b = Math.floor((x - lo) / bw);
+      if (b >= 0 && b < bins) counts[b]++;
+    });
+    const maxC = Math.max(...counts, 1);
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    const PAD = 36, baseY = cv.height - PAD, maxH = cv.height - 2 * PAD;
+    const cw = (cv.width - 2 * PAD) / bins;
+    // zero line
+    const zeroX = PAD + (0 - lo) / (hi - lo) * (cv.width - 2 * PAD);
+    ctx.strokeStyle = '#bbb'; ctx.beginPath(); ctx.moveTo(zeroX, PAD); ctx.lineTo(zeroX, baseY); ctx.stroke();
+    ctx.fillStyle = '#999'; ctx.font = '11px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('0', zeroX, baseY + 16);
+    ctx.fillText('-5', PAD, baseY + 16);
+    ctx.fillText('5', cv.width - PAD, baseY + 16);
+    // bars
+    counts.forEach((c, i) => {
+      const h = c / maxC * maxH;
+      ctx.fillStyle = '#3498db';
+      ctx.fillRect(PAD + i * cw, baseY - h, cw - 1, h);
+    });
+    out.textContent = 'Drew ' + N + ' samples • mean=' + mean.toFixed(1) +
+      ', std=' + std.toFixed(1) + '. Most values cluster within ±' + std.toFixed(1) +
+      ' of ' + mean.toFixed(1) + '.';
+  }
+  btn.addEventListener('click', draw);
+  M.addEventListener('input', draw);
+  S.addEventListener('input', draw);
+  draw();
+})();
+
+// ─────────────────────────────────────────────────────────
+// DEMO 5 — Softmax with temperature
+// ─────────────────────────────────────────────────────────
+(function () {
+  const T = document.getElementById('tmpT'), val = document.getElementById('tmpVal');
+  const cv = document.getElementById('tmpCanvas'), out = document.getElementById('tmpOut');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const logits = [3.0, 1.5, 0.2];          // fixed
+  const labels = ['X', 'Y', 'Z'];
+  const colors = ['#4361ee', '#9b59b6', '#2ecc71'];
+
+  function draw() {
+    const temp = +T.value;
+    const probs = softmax(logits, temp);
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    const baseY = 190, maxH = 150, bw = 150, gap = 90;
+    const startX = (cv.width - (bw * 3 + gap * 2)) / 2;
+    ctx.strokeStyle = '#ccc';
+    ctx.beginPath(); ctx.moveTo(40, baseY); ctx.lineTo(cv.width - 20, baseY); ctx.stroke();
+    ctx.fillStyle = '#999'; ctx.font = '11px monospace'; ctx.textAlign = 'right';
+    ctx.fillText('1.0', 36, baseY - maxH + 4);
+    ctx.fillText('0', 36, baseY + 4);
+    probs.forEach((p, i) => {
+      const x = startX + i * (bw + gap);
+      const h = p * maxH;
+      ctx.fillStyle = colors[i];
+      ctx.fillRect(x, baseY - h, bw, h);
+      ctx.fillStyle = '#1a1a2e'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText((p * 100).toFixed(1) + '%', x + bw / 2, baseY - h - 8);
+      ctx.fillStyle = '#555'; ctx.font = '12px monospace';
+      ctx.fillText('logit ' + labels[i] + ' = ' + logits[i].toFixed(1), x + bw / 2, baseY + 20);
+    });
+    let mood = temp <= 0.5 ? 'cold → sharp, predictable' :
+               temp >= 1.6 ? 'hot → flat, random' : 'balanced';
+    val.textContent = 'T = ' + temp.toFixed(2) + '  (' + mood + ')';
+    out.textContent = 'probabilities = [' + probs.map(p => p.toFixed(3)).join(', ') + ']';
+  }
+  T.addEventListener('input', draw);
+  draw();
+})();
+</script>
+</body>
+</html>

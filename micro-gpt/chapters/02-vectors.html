@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vectors &amp; Linear Algebra — MicroGPT Course</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  .demo canvas { background: #fff; cursor: crosshair; max-width: 100%; }
+  .demo .readout {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .demo .chip {
+    font-family: 'SF Mono', monospace;
+    font-size: .85em;
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 6px 10px;
+  }
+  .demo .chip b { color: var(--accent2); }
+  .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 5px; vertical-align: baseline; }
+  .vec-list b { color: var(--accent2); font-family: monospace; }
+</style>
+</head>
+<body>
+<button id="hamburger">&#9776;</button>
+<nav id="sidebar"></nav>
+<div class="progress-bar"><div class="fill"></div></div>
+<main id="content">
+
+  <h1>Vectors &amp; Linear Algebra</h1>
+  <p class="subtitle">
+    <span class="difficulty beginner">Beginner</span>
+    The single most important idea in this whole course — and it's simpler than its
+    scary name. This page is hands-on: drag things, watch numbers change.
+  </p>
+
+  <p>
+    "Linear algebra" sounds like a course you'd avoid in college. Forget the name.
+    The only thing you actually need is one humble idea: <strong>a list of
+    numbers</strong>. That's a vector. Everything else on this page is just things
+    you can <em>do</em> with lists of numbers, and we'll build them up one small step
+    at a time, with pictures you can manipulate.
+  </p>
+
+  <div class="box info">
+    <strong>What is a vector?</strong>
+    A vector is just an ordered list of numbers. <code>[72]</code> is a vector.
+    <code>[3, 5]</code> is a vector. <code>[1.2, -0.4, 8.0, 3.3, 0.1]</code> is a
+    vector. As a Java programmer you already know this type — it's a
+    <code>double[]</code>. You've been using vectors for years without the fancy word.
+  </div>
+
+  <div class="box tip">
+    <strong>Concrete example</strong>
+    <p>The same idea at different sizes — each is just a list of numbers:</p>
+    <p><strong>1D</strong> — a temperature: <code>[72]</code> &rarr; one number on a thermometer.</p>
+    <p><strong>2D</strong> — a GPS coordinate: <code>[37.77, &minus;122.42]</code> &rarr; San Francisco.</p>
+    <p><strong>3D</strong> — an RGB color: <code>[255, 128, 0]</code> &rarr; orange.</p>
+    <p><strong>16D</strong> — our GPT's embedding of the letter <code>'a'</code>:
+    <code>[0.03, &minus;0.12, 0.07, 0.15, &minus;0.04, 0.09, &minus;0.11, 0.02, 0.06, &minus;0.08, 0.14, &minus;0.01, 0.05, &minus;0.13, 0.10, &minus;0.03]</code>
+    &rarr; we can't picture it, but addition, dot products, and distance work on it
+    exactly as they do on <code>[72]</code>.</p>
+  </div>
+
+  <div class="box tip">
+    <strong>Real-life analogy</strong>
+    A vector is a recipe. A chocolate cake might be
+    <code>[200g flour, 150g sugar, 100g butter, 50g cocoa]</code> — that's a
+    4-dimensional vector! Two recipes with similar ingredient vectors taste similar.
+    And you can <em>subtract</em> recipes to find the difference:
+    <code>[+50g cocoa, &minus;30g sugar]</code> = "more chocolatey, less sweet." The
+    arithmetic on the list of numbers is the arithmetic on the thing itself.
+  </div>
+
+  <h2>Why does AI need vectors at all?</h2>
+
+  <p>
+    Recall from Chapter 1: a GPT is a pile of numbers doing arithmetic. But the
+    things we care about — letters, words, names — aren't numbers. A computer can't
+    multiply the letter <code>k</code> by anything. So before any AI math can happen,
+    <strong>we must turn everything into numbers.</strong>
+  </p>
+
+  <p>
+    And not just one number — usually a <em>list</em> of numbers, because one number
+    can't capture much. To describe a person you need several facts (height, age,
+    …). To describe the "meaning" of a word, a GPT uses a list of 16 numbers (in our
+    model) or 12,000 numbers (in GPT-4). That list is a vector. Vectors are the
+    language every part of a neural network speaks. Master this page and the rest of
+    the course is downhill.
+  </p>
+
+  <div class="box info">
+    <strong>But why do we need vectors at all? Why not a single number per word?</strong>
+    Because computers only understand numbers, and a <em>single</em> number can't
+    capture the richness of a letter or a word. Think of GPS: two numbers (latitude,
+    longitude) pin down a location far better than one street number ever could —
+    the second number adds a whole new axis of information. A vector is the same
+    idea taken further: a list of numbers lets you encode many properties of a thing
+    at once, so the model has room to express "this character is vowel-ish,
+    name-start-ish, rarely-doubled" all in one bundle.
+  </div>
+
+  <h2>1D: a vector with one number</h2>
+
+  <p>
+    Let's start at the absolute bottom. A vector with a single number,
+    <code>[x]</code>, is called a <strong>1-dimensional</strong> (1D) vector.
+    "Dimensions" just means "how many numbers are in the list." One number, one
+    dimension.
+  </p>
+
+  <p>
+    A single number is naturally a position on a line — a thermometer, a volume
+    knob, a slider. The temperature <strong>72°F</strong> is the 1D vector
+    <code>[72]</code>: one number, one spot on the number line. Drag the slider and
+    watch the dot move. That dot <em>is</em> the vector.
+  </p>
+
+  <div class="demo">
+    <h4>Demo 1 — A 1D vector lives on a line</h4>
+    <canvas id="c1" width="640" height="130"></canvas>
+    <div class="controls">
+      <label>value: <input type="range" id="s1" min="0" max="100" value="72"></label>
+      <span class="chip">vector = [<b id="v1">72</b>]</span>
+    </div>
+  </div>
+
+  <div class="box tip">
+    <strong>Try this</strong>
+    Slide all the way to each end. Notice there's nothing else to a 1D vector — it's
+    one number, and "where it is on the line" is the entire story. That's as simple
+    as a vector gets. Now we add a second number.
+  </div>
+
+  <h2>2D: a vector with two numbers</h2>
+
+  <p>
+    Add a second number and you get a <strong>2D vector</strong>, <code>[x, y]</code>.
+    Two numbers describe a point on a flat surface — exactly like coordinates on a
+    map or pixels on your screen. The first number is how far <em>right</em>, the
+    second is how far <em>up</em>.
+  </p>
+
+  <p>
+    There are two equally correct ways to picture a 2D vector, and both matter later:
+  </p>
+  <ul>
+    <li><strong>As a point</strong> — a single dot at position (x, y).</li>
+    <li><strong>As an arrow</strong> — pointing from the origin (0,0) out to that
+        point. The arrow shows both a <em>direction</em> and a <em>length</em>.</li>
+  </ul>
+
+  <p>
+    In the demo below, <strong>drag the head of either arrow</strong>. Arrow
+    <span class="swatch" style="background:#3498db"></span><b style="color:#3498db">A</b>
+    and arrow
+    <span class="swatch" style="background:#2ecc71"></span><b style="color:#2ecc71">B</b>
+    are both yours to move. As you drag, watch every number on the right update live.
+    We'll explain each of those numbers right after.
+  </p>
+
+  <div class="demo">
+    <h4>Demo 2 — Drag two 2D vectors</h4>
+    <canvas id="c2" width="500" height="500"></canvas>
+    <div class="controls">
+      <label><input type="checkbox" id="showSum" checked> show A + B (sum)</label>
+      <label><input type="checkbox" id="showPar" checked> show parallelogram</label>
+    </div>
+    <div class="readout">
+      <span class="chip"><span class="swatch" style="background:#3498db"></span>A = [<b id="ax">0</b>, <b id="ay">0</b>]</span>
+      <span class="chip"><span class="swatch" style="background:#2ecc71"></span>B = [<b id="bx">0</b>, <b id="by">0</b>]</span>
+      <span class="chip"><span class="swatch" style="background:#9b59b6"></span>A + B = [<b id="sx">0</b>, <b id="sy">0</b>]</span>
+      <span class="chip">A &middot; B (dot) = <b id="dot">0</b></span>
+      <span class="chip">distance(A,B) = <b id="dist">0</b></span>
+      <span class="chip">|A| = <b id="lenA">0</b>, |B| = <b id="lenB">0</b></span>
+    </div>
+  </div>
+
+  <h3>Vector addition — just add the lists</h3>
+  <p>
+    To add two vectors you add them slot by slot:
+    <code>[3, 1] + [1, 2] = [4, 3]</code>. Geometrically this is the
+    <strong>parallelogram rule</strong>: lay arrow B's tail at A's head, and the sum
+    is the arrow from the origin to where you end up. Toggle "show parallelogram" in
+    the demo and drag — you'll see A and B form two sides of a parallelogram, and the
+    purple sum
+    <span class="swatch" style="background:#9b59b6"></span> is its diagonal. Addition
+    is "do one move, then the other."
+  </p>
+  <div class="math-block">[a&#8321;, a&#8322;] + [b&#8321;, b&#8322;] = [a&#8321;+b&#8321;, &nbsp; a&#8322;+b&#8322;]</div>
+
+  <h3>The dot product — "do these point the same way?"</h3>
+  <p>
+    The <strong>dot product</strong> is the operation you'll meet most in this whole
+    course (attention, in Chapter 7, is built almost entirely out of dot products).
+    It takes two vectors and returns a <em>single number</em>. The recipe: multiply
+    matching slots, then add up the results.
+  </p>
+  <div class="math-block">A &middot; B = a&#8321;&times;b&#8321; + a&#8322;&times;b&#8322;</div>
+  <p>So <code>[3, 1] &middot; [1, 2] = 3&times;1 + 1&times;2 = 5</code>. But the
+    number itself is less important than what its <em>sign</em> tells you:</p>
+  <ul>
+    <li><strong>Large positive</strong> dot product &rarr; the two arrows point in
+        <em>similar</em> directions.</li>
+    <li><strong>Near zero</strong> &rarr; the arrows are roughly
+        <em>perpendicular</em> (at a right angle) — unrelated.</li>
+    <li><strong>Negative</strong> &rarr; the arrows point in <em>opposite</em>
+        directions.</li>
+  </ul>
+  <div class="box tip">
+    <strong>Try this</strong>
+    In Demo 2, drag B so it points the <em>same</em> way as A — the dot product gets
+    big and positive. Now drag B to a right angle (90°) against A — watch the dot
+    product pass through <em>zero</em>. Keep going until B points opposite A — it
+    goes <em>negative</em>. The dot product is a "same-direction meter." That single
+    fact is the heart of how a GPT decides which words are relevant to each other.
+  </div>
+
+  <div class="box info">
+    <strong>But why does the dot product measure similarity?</strong>
+    Look at the recipe: you multiply matching slots and add them up. When two arrows
+    point the same way, their slots have the same signs, so every product is
+    positive and they pile up into a big positive total. When the arrows are
+    perpendicular, the positive and negative products cancel out and you land near
+    zero. When they point opposite ways, the products are mostly negative and the
+    total goes negative. So the dot product is really answering one question: "how
+    much do these two arrows <em>agree</em>?" That's exactly what "similar" means in
+    number-space.
+  </div>
+
+  <h3>Length and distance — Pythagoras returns</h3>
+  <p>
+    The <strong>length</strong> (or "magnitude") of a vector is how long its arrow
+    is. It's just the Pythagorean theorem you half-remember from school:
+    <code>|A| = &radic;(a&#8321;&sup2; + a&#8322;&sup2;)</code>. The
+    <strong>distance</strong> between two vectors is the length of the gap between
+    their heads — same formula, applied to the difference:
+  </p>
+  <div class="math-block">distance(A, B) = &radic;((a&#8321;&minus;b&#8321;)&sup2; + (a&#8322;&minus;b&#8322;)&sup2;)</div>
+  <p>
+    Why care? Because once words are vectors (Chapter 3), <em>distance becomes
+    meaning</em>. Two words whose vectors sit close together are treated as similar;
+    far apart means unrelated. "Close in number-space = similar in meaning" is the
+    idea the entire field rests on.
+  </p>
+
+  <div class="box info">
+    <strong>Key takeaway</strong>
+    Three operations, three intuitions, and you've got the core toolkit:
+    <strong>addition</strong> = combine/move, <strong>dot product</strong> =
+    how-much-same-direction, <strong>distance</strong> = how-different. Everything a
+    neural network computes is built from these.
+  </div>
+
+  <h2>3D: add a third number</h2>
+
+  <p>
+    A <strong>3D vector</strong> <code>[x, y, z]</code> is a point in space — like
+    the corner of a room measured as (across, up, depth). Same idea as 2D, just one
+    more number. The math doesn't change at all: addition is still slot-by-slot, the
+    dot product still multiplies-and-sums all three slots, distance still uses
+    Pythagoras (now with three terms).
+  </p>
+  <p>
+    The only new difficulty is <em>drawing</em> it — your screen is flat, but the
+    vector lives in 3D. We solve that by <strong>projecting</strong>: squashing 3D
+    onto the 2D screen, the way a photograph flattens the real world. Drag inside the
+    demo to <strong>rotate the view</strong> and convince yourself it's a genuine 3D
+    arrow. Use the sliders to change the vector's three numbers.
+  </p>
+
+  <div class="demo">
+    <h4>Demo 3 — A 3D vector (drag to rotate the view)</h4>
+    <canvas id="c3" width="500" height="420"></canvas>
+    <div class="controls">
+      <label>x: <input type="range" id="x3" min="-5" max="5" step="0.5" value="3"></label>
+      <label>y: <input type="range" id="y3" min="-5" max="5" step="0.5" value="2"></label>
+      <label>z: <input type="range" id="z3" min="-5" max="5" step="0.5" value="4"></label>
+      <span class="chip">vector = [<b id="v3">3, 2, 4</b>]</span>
+    </div>
+  </div>
+
+  <div class="box tip">
+    <strong>Try this</strong>
+    Drag slowly in a circle. The red, green, and blue lines are the three axes
+    (x, y, z). The purple arrow is your vector. Notice that rotating only changes how
+    we <em>view</em> it — the three numbers never change. The vector is the numbers;
+    the picture is just one way of looking at them.
+  </div>
+
+  <h2>5D and beyond: where pictures give up</h2>
+
+  <p>
+    Here's the leap that trips people up, so let's say it plainly:
+    <strong>a 5D vector is just a list of five numbers.</strong> Nothing more
+    mysterious than a 2D vector — it has three extra slots. We <em>cannot draw</em> a
+    5D arrow, because we have no 5-directional space to draw in. But the
+    <em>math is completely unchanged.</em>
+  </p>
+
+  <div class="box info">
+    <strong>But why can't we just visualize 5D?</strong>
+    It's not a lack of cleverness — it's biology. Our brains evolved to navigate the
+    3D world we live in, so we simply have no neural hardware for picturing a fourth
+    or fifth perpendicular direction. Try it and your mind quietly reuses the three
+    axes it already has. The reassuring part: the <em>math</em> doesn't share this
+    limitation. Addition, dot product, and distance are just arithmetic on lists of
+    numbers, and they work identically whether the list has 2 entries or 12,000. You
+    don't have to see it for it to be true.
+  </div>
+
+  <table>
+    <thead><tr><th>Vector</th><th>Looks like</th><th>Can we picture it?</th></tr></thead>
+    <tbody>
+      <tr><td>1D</td><td><code>[x&#8321;]</code></td><td>Yes — a point on a line</td></tr>
+      <tr><td>2D</td><td><code>[x&#8321;, x&#8322;]</code></td><td>Yes — a point on a plane</td></tr>
+      <tr><td>3D</td><td><code>[x&#8321;, x&#8322;, x&#8323;]</code></td><td>Yes — a point in space</td></tr>
+      <tr><td>5D</td><td><code>[x&#8321;, x&#8322;, x&#8323;, x&#8324;, x&#8325;]</code></td><td>No — but the math still works</td></tr>
+      <tr><td>16D (our GPT)</td><td><code>[x&#8321;, &hellip;, x&#8321;&#8326;]</code></td><td>No — yet this is what each token becomes</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    A concrete 5D example. Describe a person with five facts:
+  </p>
+  <p class="vec-list">
+    person = <b>[height_cm, weight_kg, age, income_k, happiness]</b><br>
+    Alice &nbsp;= <b>[165, 60, 30, 55, 8]</b><br>
+    Bob &nbsp;&nbsp;&nbsp;= <b>[180, 85, 45, 90, 6]</b>
+  </p>
+  <p>
+    Want to know how similar Alice and Bob are? Use the <em>exact same distance
+    formula</em> as the 2D demo, just with five terms under the square root. The
+    dot product? Same — multiply all five matching slots, add them up. Every tool you
+    learned on the 2D plane works, unchanged, in 5 or 16 or 12,000 dimensions. That
+    is the quiet superpower of vectors: <strong>the operations don't care how many
+    dimensions there are.</strong>
+  </p>
+
+  <div class="box info">
+    <strong>Key takeaway</strong>
+    Stop trying to <em>visualize</em> high dimensions — nobody can, not even
+    researchers. Instead, trust the arithmetic. When this course says a token becomes
+    a "16-dimensional vector," your mental image should simply be:
+    <code>double[16]</code>, a list of 16 numbers, on which we run addition, dot
+    products, and distances exactly as you saw in 2D.
+  </div>
+
+  <h2>Seeing the unseeable: dimensionality reduction</h2>
+
+  <p>
+    There's a real problem, though. If a word's meaning is a 16-number vector, and
+    we want to <em>check whether the model grouped similar words together</em>, we
+    can't look at 16D. So we cheat — cleverly. We <strong>project</strong> the
+    high-dimensional data down to 2D so it fits on a screen, trying hard to keep the
+    important structure intact. This is called <strong>dimensionality reduction</strong>.
+  </p>
+
+  <div class="box info">
+    <strong>But why bother reducing dimensions at all?</strong>
+    Purely because we're human and we need to <em>see</em> patterns to trust them.
+    The model is perfectly happy working in 16 dimensions — it never looks at a
+    picture. But we want to check things like "did vowels end up clustered together?",
+    and our eyes only do 2D. PCA finds the two directions in the high-dimensional
+    cloud where the data spreads out the most, then flattens everything onto those
+    two axes. It's lossy — you throw away the other dimensions — but what survives is
+    usually enough to reveal the clusters. It's a tool for <em>us</em>, not for the
+    model.
+  </div>
+
+  <div class="box info">
+    <strong>The shadow analogy</strong>
+    Hold your hand up to a lamp and it casts a 2D shadow on the wall. The shadow
+    throws away depth, yet you can still recognize the hand's shape — fingers,
+    spread, gaps. Dimensionality reduction is casting a smart shadow of
+    high-dimensional data onto a 2D wall, chosen at the angle that preserves the most
+    shape.
+  </div>
+
+  <h3>PCA — choosing the best angle for the shadow</h3>
+  <p>
+    The most common method is <strong>PCA</strong> (Principal Component Analysis).
+    Don't let the name intimidate you. PCA answers one question: <em>"Of all the
+    angles I could shine the light from, which one casts the shadow that spreads the
+    data out the most?"</em> The angle along which the data varies most is called the
+    first <strong>principal component</strong>; the next-best angle (at a right angle
+    to the first) is the second. Use those two as your 2D axes, and you get the most
+    informative flat picture possible.
+  </p>
+
+  <p>
+    The demo below has <strong>8 words</strong>, each hand-assigned a 5D vector
+    (think of these five numbers as crude "meaning" features). Four are royalty, four
+    are fruit — but PCA <em>isn't told that</em>. It only sees the raw numbers. Click
+    the button to run real PCA (computed live in your browser, no libraries) and
+    watch the 5D vectors collapse onto a 2D map. The royalty words and the fruit
+    words should fall into two separate clusters — meaning that survived the shadow.
+  </p>
+
+  <div class="demo">
+    <h4>Demo 4 — 8 words as 5D vectors, projected to 2D by PCA</h4>
+    <div style="overflow-x:auto">
+    <table style="margin:0 0 14px">
+      <thead><tr><th>word</th><th>f&#8321;</th><th>f&#8322;</th><th>f&#8323;</th><th>f&#8324;</th><th>f&#8325;</th></tr></thead>
+      <tbody id="pcaTable"></tbody>
+    </table>
+    </div>
+    <canvas id="c4" width="520" height="420"></canvas>
+    <div class="controls">
+      <button id="runPca">Run PCA &rarr; project to 2D</button>
+      <span class="chip" id="pcaMsg">click to project the 5D vectors onto a 2D map</span>
+    </div>
+  </div>
+
+  <p>
+    What you're seeing is exactly the tool we'll use in later chapters to peek inside
+    the model's "mind." After training, we'll take the 16D vectors the GPT learned
+    for each character and PCA them to 2D — and we'll find that letters which behave
+    similarly (say, vowels) end up near each other. The model's understanding,
+    cast as a shadow we can finally see.
+  </p>
+
+  <div class="box tip">
+    <strong>Try this</strong>
+    Look at <em>which direction</em> separates the two clusters on the map — that
+    horizontal spread is the first principal component, the single "angle" that best
+    tells royalty from fruit. PCA found it on its own, with no labels, purely from
+    how the numbers vary.
+  </div>
+
+  <h2>What you now know</h2>
+  <ul>
+    <li>A <strong>vector</strong> is a list of numbers — a <code>double[]</code>.</li>
+    <li><strong>Dimensions</strong> = how many numbers are in the list.</li>
+    <li><strong>Addition</strong> combines vectors slot-by-slot (the parallelogram).</li>
+    <li>The <strong>dot product</strong> is a "same-direction meter" — one number,
+        sign tells you similar / perpendicular / opposite.</li>
+    <li><strong>Distance</strong> measures how different two vectors are (Pythagoras).</li>
+    <li>These operations work <strong>identically</strong> in any number of
+        dimensions, even ones you can't picture.</li>
+    <li><strong>PCA</strong> projects high-D data to 2D so we can see its structure —
+        a smart shadow.</li>
+  </ul>
+
+  <p>
+    Next we answer the question this chapter kept deferring: <em>how</em> does a
+    computer decide which numbers to put in a word's vector? That's
+    <strong>embeddings</strong> — and it's where text finally turns into the vectors
+    you just learned to manipulate.
+  </p>
+
+  <div class="page-nav"></div>
+</main>
+
+<script src="../js/nav.js"></script>
+<script src="../js/highlight.js"></script>
+
+<!-- ===== Demo 1: 1D number line ===== -->
+<script>
+(function () {
+  const cv = document.getElementById('c1');
+  const ctx = cv.getContext('2d');
+  const slider = document.getElementById('s1');
+  const out = document.getElementById('v1');
+  const W = cv.width, H = cv.height;
+  const minV = 0, maxV = 100;
+  const padL = 50, padR = 50;
+  const lineY = 75;
+
+  function valToX(v) {
+    return padL + (v - minV) / (maxV - minV) * (W - padL - padR);
+  }
+
+  function draw() {
+    const v = Number(slider.value);
+    out.textContent = v;
+    ctx.clearRect(0, 0, W, H);
+
+    // axis
+    ctx.strokeStyle = '#bbb';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(padL, lineY);
+    ctx.lineTo(W - padR, lineY);
+    ctx.stroke();
+
+    // ticks + labels
+    ctx.fillStyle = '#888';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'center';
+    for (let t = minV; t <= maxV; t += 10) {
+      const x = valToX(t);
+      ctx.strokeStyle = '#ddd';
+      ctx.beginPath();
+      ctx.moveTo(x, lineY - 5);
+      ctx.lineTo(x, lineY + 5);
+      ctx.stroke();
+      ctx.fillText(t, x, lineY + 22);
+    }
+
+    // the dot (the vector)
+    const x = valToX(v);
+    ctx.fillStyle = '#4361ee';
+    ctx.beginPath();
+    ctx.arc(x, lineY, 11, 0, Math.PI * 2);
+    ctx.fill();
+
+    // value bubble
+    ctx.fillStyle = '#3a0ca3';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillText('[' + v + ']', x, lineY - 22);
+  }
+
+  slider.addEventListener('input', draw);
+  draw();
+})();
+</script>
+
+<!-- ===== Demo 2: 2D vectors, addition, dot product, distance ===== -->
+<script>
+(function () {
+  const cv = document.getElementById('c2');
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const cx = W / 2, cy = H / 2;
+  const scale = 22;          // pixels per unit
+  const range = 10;          // axis goes -10..10
+
+  let A = { x: 4, y: 2 };
+  let B = { x: -3, y: 4 };
+  let dragging = null;
+
+  const showSum = document.getElementById('showSum');
+  const showPar = document.getElementById('showPar');
+
+  function toPx(p) { return { x: cx + p.x * scale, y: cy - p.y * scale }; }
+  function toMath(px, py) { return { x: (px - cx) / scale, y: (cy - py) / scale }; }
+
+  function arrow(from, to, color, width) {
+    const f = toPx(from), t = toPx(to);
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = width || 3;
+    ctx.beginPath();
+    ctx.moveTo(f.x, f.y);
+    ctx.lineTo(t.x, t.y);
+    ctx.stroke();
+    // head
+    const ang = Math.atan2(t.y - f.y, t.x - f.x);
+    const hl = 12;
+    ctx.beginPath();
+    ctx.moveTo(t.x, t.y);
+    ctx.lineTo(t.x - hl * Math.cos(ang - 0.4), t.y - hl * Math.sin(ang - 0.4));
+    ctx.lineTo(t.x - hl * Math.cos(ang + 0.4), t.y - hl * Math.sin(ang + 0.4));
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function grid() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = '#eee';
+    ctx.lineWidth = 1;
+    for (let i = -range; i <= range; i++) {
+      const px = toPx({ x: i, y: 0 }).x;
+      const py = toPx({ x: 0, y: i }).y;
+      ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, H); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(W, py); ctx.stroke();
+    }
+    // axes
+    ctx.strokeStyle = '#bbb';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(W, cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, H); ctx.stroke();
+  }
+
+  function dot(p, color) {
+    const px = toPx(p);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(px.x, px.y, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  function r1(n) { return Math.round(n * 10) / 10; }
+
+  function draw() {
+    grid();
+    const S = { x: A.x + B.x, y: A.y + B.y };
+
+    // parallelogram
+    if (showPar.checked) {
+      ctx.strokeStyle = 'rgba(155,89,182,.35)';
+      ctx.setLineDash([5, 5]);
+      ctx.lineWidth = 2;
+      const pa = toPx(A), pb = toPx(B), ps = toPx(S);
+      ctx.beginPath();
+      ctx.moveTo(pa.x, pa.y); ctx.lineTo(ps.x, ps.y);
+      ctx.moveTo(pb.x, pb.y); ctx.lineTo(ps.x, ps.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // sum
+    if (showSum.checked) arrow({ x: 0, y: 0 }, S, '#9b59b6', 3);
+
+    arrow({ x: 0, y: 0 }, A, '#3498db', 3);
+    arrow({ x: 0, y: 0 }, B, '#2ecc71', 3);
+    dot(A, '#3498db');
+    dot(B, '#2ecc71');
+
+    // labels
+    ctx.font = 'bold 14px sans-serif';
+    const la = toPx(A), lb = toPx(B);
+    ctx.fillStyle = '#2471a3'; ctx.fillText('A', la.x + 10, la.y - 8);
+    ctx.fillStyle = '#1e8449'; ctx.fillText('B', lb.x + 10, lb.y - 8);
+
+    // readout
+    const dotp = A.x * B.x + A.y * B.y;
+    const distv = Math.hypot(A.x - B.x, A.y - B.y);
+    document.getElementById('ax').textContent = r1(A.x);
+    document.getElementById('ay').textContent = r1(A.y);
+    document.getElementById('bx').textContent = r1(B.x);
+    document.getElementById('by').textContent = r1(B.y);
+    document.getElementById('sx').textContent = r1(S.x);
+    document.getElementById('sy').textContent = r1(S.y);
+    document.getElementById('dot').textContent = r1(dotp);
+    document.getElementById('dist').textContent = r1(distv);
+    document.getElementById('lenA').textContent = r1(Math.hypot(A.x, A.y));
+    document.getElementById('lenB').textContent = r1(Math.hypot(B.x, B.y));
+  }
+
+  function pointerPos(e) {
+    const rect = cv.getBoundingClientRect();
+    const sx = cv.width / rect.width, sy = cv.height / rect.height;
+    const t = e.touches ? e.touches[0] : e;
+    return { x: (t.clientX - rect.left) * sx, y: (t.clientY - rect.top) * sy };
+  }
+
+  function nearest(p) {
+    const m = toMath(p.x, p.y);
+    const da = Math.hypot(m.x - A.x, m.y - A.y);
+    const db = Math.hypot(m.x - B.x, m.y - B.y);
+    if (Math.min(da, db) > 1.5) return null;   // must be close to a head
+    return da < db ? 'A' : 'B';
+  }
+
+  function start(e) {
+    dragging = nearest(pointerPos(e));
+    if (dragging) e.preventDefault();
+  }
+  function move(e) {
+    if (!dragging) return;
+    e.preventDefault();
+    const m = toMath(pointerPos(e).x, pointerPos(e).y);
+    const v = { x: Math.max(-range, Math.min(range, m.x)),
+                y: Math.max(-range, Math.min(range, m.y)) };
+    if (dragging === 'A') A = v; else B = v;
+    draw();
+  }
+  function end() { dragging = null; }
+
+  cv.addEventListener('mousedown', start);
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', end);
+  cv.addEventListener('touchstart', start, { passive: false });
+  cv.addEventListener('touchmove', move, { passive: false });
+  cv.addEventListener('touchend', end);
+  showSum.addEventListener('change', draw);
+  showPar.addEventListener('change', draw);
+  draw();
+})();
+</script>
+
+<!-- ===== Demo 3: 3D vector, rotatable ===== -->
+<script>
+(function () {
+  const cv = document.getElementById('c3');
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const cx = W / 2, cy = H / 2 + 20;
+  const scale = 34;
+
+  let yaw = 0.6, pitch = -0.5;
+  let vec = { x: 3, y: 2, z: 4 };
+  let dragging = false, lastX = 0, lastY = 0;
+
+  function rot(p) {
+    // rotate around Y (yaw)
+    let x = p.x * Math.cos(yaw) - p.z * Math.sin(yaw);
+    let z = p.x * Math.sin(yaw) + p.z * Math.cos(yaw);
+    let y = p.y;
+    // rotate around X (pitch)
+    let y2 = y * Math.cos(pitch) - z * Math.sin(pitch);
+    let z2 = y * Math.sin(pitch) + z * Math.cos(pitch);
+    return { x: x, y: y2, z: z2 };
+  }
+  function proj(p) {
+    const r = rot(p);
+    return { x: cx + r.x * scale, y: cy - r.y * scale, depth: r.z };
+  }
+
+  function line(a, b, color, width) {
+    const pa = proj(a), pb = proj(b);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width || 2;
+    ctx.beginPath();
+    ctx.moveTo(pa.x, pa.y);
+    ctx.lineTo(pb.x, pb.y);
+    ctx.stroke();
+  }
+
+  function arrow3(a, b, color) {
+    line(a, b, color, 3.5);
+    const pa = proj(a), pb = proj(b);
+    const ang = Math.atan2(pb.y - pa.y, pb.x - pa.x);
+    const hl = 13;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(pb.x, pb.y);
+    ctx.lineTo(pb.x - hl * Math.cos(ang - 0.4), pb.y - hl * Math.sin(ang - 0.4));
+    ctx.lineTo(pb.x - hl * Math.cos(ang + 0.4), pb.y - hl * Math.sin(ang + 0.4));
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const O = { x: 0, y: 0, z: 0 };
+
+    // reference cube wireframe (light)
+    const s = 5;
+    const corners = [
+      [0,0,0],[s,0,0],[s,0,s],[0,0,s],
+      [0,s,0],[s,s,0],[s,s,s],[0,s,s]
+    ].map(c => ({ x: c[0], y: c[1], z: c[2] }));
+    const edges = [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+    edges.forEach(e => line(corners[e[0]], corners[e[1]], '#f0f0f0', 1));
+
+    // axes
+    arrow3(O, { x: s, y: 0, z: 0 }, '#e74c3c'); // X red
+    arrow3(O, { x: 0, y: s, z: 0 }, '#2ecc71'); // Y green
+    arrow3(O, { x: 0, y: 0, z: s }, '#3498db'); // Z blue
+
+    // axis labels
+    ctx.font = 'bold 13px sans-serif';
+    let lx = proj({ x: s + 0.4, y: 0, z: 0 });
+    let ly = proj({ x: 0, y: s + 0.4, z: 0 });
+    let lz = proj({ x: 0, y: 0, z: s + 0.4 });
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('x', lx.x, lx.y);
+    ctx.fillStyle = '#2ecc71'; ctx.fillText('y', ly.x, ly.y);
+    ctx.fillStyle = '#3498db'; ctx.fillText('z', lz.x, lz.y);
+
+    // the vector
+    arrow3(O, vec, '#9b59b6');
+    // drop-line to floor (helps read depth)
+    ctx.setLineDash([4, 4]);
+    line({ x: vec.x, y: 0, z: vec.z }, vec, 'rgba(155,89,182,.4)', 1.5);
+    line(O, { x: vec.x, y: 0, z: vec.z }, 'rgba(155,89,182,.25)', 1.5);
+    ctx.setLineDash([]);
+
+    const hp = proj(vec);
+    ctx.fillStyle = '#6c3483';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText('[' + vec.x + ', ' + vec.y + ', ' + vec.z + ']', hp.x + 8, hp.y - 6);
+  }
+
+  function down(e) { dragging = true; const p = pos(e); lastX = p.x; lastY = p.y; e.preventDefault(); }
+  function moveR(e) {
+    if (!dragging) return;
+    const p = pos(e);
+    yaw   += (p.x - lastX) * 0.01;
+    pitch += (p.y - lastY) * 0.01;
+    pitch = Math.max(-1.4, Math.min(1.4, pitch));
+    lastX = p.x; lastY = p.y;
+    draw();
+    e.preventDefault();
+  }
+  function up() { dragging = false; }
+  function pos(e) {
+    const rect = cv.getBoundingClientRect();
+    const sx = cv.width / rect.width, sy = cv.height / rect.height;
+    const t = e.touches ? e.touches[0] : e;
+    return { x: (t.clientX - rect.left) * sx, y: (t.clientY - rect.top) * sy };
+  }
+
+  cv.addEventListener('mousedown', down);
+  window.addEventListener('mousemove', moveR);
+  window.addEventListener('mouseup', up);
+  cv.addEventListener('touchstart', down, { passive: false });
+  cv.addEventListener('touchmove', moveR, { passive: false });
+  cv.addEventListener('touchend', up);
+
+  ['x3', 'y3', 'z3'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+      vec = {
+        x: Number(document.getElementById('x3').value),
+        y: Number(document.getElementById('y3').value),
+        z: Number(document.getElementById('z3').value)
+      };
+      document.getElementById('v3').textContent = vec.x + ', ' + vec.y + ', ' + vec.z;
+      draw();
+    });
+  });
+  draw();
+})();
+</script>
+
+<!-- ===== Demo 4: PCA of 8 words (5D -> 2D) ===== -->
+<script>
+(function () {
+  // 8 words, each a hand-built 5D vector. Two hidden groups: royalty & fruit.
+  const data = [
+    { w: 'king',     cat: 'royal', v: [9, 8, 2, 1, 7] },
+    { w: 'queen',    cat: 'royal', v: [8, 9, 2, 2, 8] },
+    { w: 'prince',   cat: 'royal', v: [7, 7, 3, 1, 6] },
+    { w: 'princess', cat: 'royal', v: [7, 8, 3, 2, 7] },
+    { w: 'apple',    cat: 'fruit', v: [1, 2, 8, 9, 2] },
+    { w: 'banana',   cat: 'fruit', v: [2, 1, 9, 8, 1] },
+    { w: 'cherry',   cat: 'fruit', v: [1, 3, 8, 9, 3] },
+    { w: 'grape',    cat: 'fruit', v: [2, 2, 9, 7, 2] }
+  ];
+  const colorOf = c => (c === 'royal' ? '#9b59b6' : '#e67e22');
+
+  // fill the table
+  const tbody = document.getElementById('pcaTable');
+  tbody.innerHTML = data.map(d =>
+    '<tr><td><b style="color:' + colorOf(d.cat) + '">' + d.w + '</b></td>' +
+    d.v.map(n => '<td>' + n + '</td>').join('') + '</tr>'
+  ).join('');
+
+  const cv = document.getElementById('c4');
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+
+  // ---- minimal linear algebra ----
+  function colMeans(rows) {
+    const n = rows.length, d = rows[0].length, m = new Array(d).fill(0);
+    rows.forEach(r => r.forEach((x, j) => m[j] += x));
+    return m.map(x => x / n);
+  }
+  function center(rows, m) {
+    return rows.map(r => r.map((x, j) => x - m[j]));
+  }
+  function covariance(Xc) {
+    const n = Xc.length, d = Xc[0].length;
+    const C = Array.from({ length: d }, () => new Array(d).fill(0));
+    for (let k = 0; k < n; k++)
+      for (let i = 0; i < d; i++)
+        for (let j = 0; j < d; j++)
+          C[i][j] += Xc[k][i] * Xc[k][j] / n;
+    return C;
+  }
+  function matVec(M, v) {
+    return M.map(row => row.reduce((s, x, j) => s + x * v[j], 0));
+  }
+  function norm(v) { return Math.sqrt(v.reduce((s, x) => s + x * x, 0)); }
+  function normalize(v) { const n = norm(v) || 1; return v.map(x => x / n); }
+  function dotp(a, b) { return a.reduce((s, x, j) => s + x * b[j], 0); }
+
+  // top eigenvector via power iteration
+  function powerIter(M, iters) {
+    let v = normalize(M.map(() => Math.random() - 0.5));
+    for (let i = 0; i < iters; i++) v = normalize(matVec(M, v));
+    return v;
+  }
+  // remove an eigen-direction so the next iteration finds the second
+  function deflate(M, v) {
+    const lambda = dotp(matVec(M, v), v);
+    return M.map((row, i) => row.map((x, j) => x - lambda * v[i] * v[j]));
+  }
+
+  function runPCA() {
+    const rows = data.map(d => d.v);
+    const m = colMeans(rows);
+    const Xc = center(rows, m);
+    const C = covariance(Xc);
+    const pc1 = powerIter(C, 200);
+    const pc2 = powerIter(deflate(C, pc1), 200);
+    return data.map((d, i) => ({
+      w: d.w, cat: d.cat,
+      x: dotp(Xc[i], pc1),
+      y: dotp(Xc[i], pc2)
+    }));
+  }
+
+  function plot(pts) {
+    ctx.clearRect(0, 0, W, H);
+    // auto-fit
+    const pad = 60;
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const sx = (W - 2 * pad) / ((maxX - minX) || 1);
+    const sy = (H - 2 * pad) / ((maxY - minY) || 1);
+    const map = p => ({
+      x: pad + (p.x - minX) * sx,
+      y: H - pad - (p.y - minY) * sy
+    });
+
+    // faint axes through the middle
+    ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.stroke();
+
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textAlign = 'center';
+    pts.forEach(p => {
+      const q = map(p);
+      ctx.fillStyle = colorOf(p.cat);
+      ctx.beginPath();
+      ctx.arc(q.x, q.y, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillText(p.w, q.x, q.y - 14);
+    });
+
+    // axis captions
+    ctx.fillStyle = '#999';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('principal component 1 →', 8, H - 8);
+    ctx.save();
+    ctx.translate(14, H - 16);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('component 2 →', 0, 0);
+    ctx.restore();
+  }
+
+  function placeholder() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#bbb';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('5-dimensional — cannot be drawn directly.', W / 2, H / 2 - 10);
+    ctx.fillText('Press the button to project to 2D.', W / 2, H / 2 + 14);
+  }
+
+  document.getElementById('runPca').addEventListener('click', () => {
+    plot(runPCA());
+    document.getElementById('pcaMsg').textContent =
+      'projected! notice royalty (purple) and fruit (orange) split apart';
+  });
+  placeholder();
+})();
+</script>
+
+</body>
+</html>

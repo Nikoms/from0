@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neural Network Layers — MicroGPT Course</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<button id="hamburger">&#9776;</button>
+<nav id="sidebar"></nav>
+<div class="progress-bar"><div class="fill"></div></div>
+<main id="content">
+
+<h1>Neural Network Layers</h1>
+<p class="subtitle">A neural network is a stack of simple functions called <strong>layers</strong>. Three of them carry almost all the weight in microGPT: the <strong>linear</strong> transform, <strong>ReLU</strong>, and <strong>RMSNorm</strong>. Master these and the transformer stops being magic.</p>
+
+<div class="box info">
+<strong>Where we are</strong>
+You now understand <code>Value</code> — a smart number that tracks gradients. Every number in this chapter is a <code>Value</code>, so everything we build is automatically differentiable. We never have to think about derivatives again; we just compose layers, and the engine handles the learning.
+</div>
+
+<h2>1. What is a "layer"?</h2>
+
+<p>Strip away the intimidating vocabulary and a layer is just this:</p>
+
+<div class="box tip">
+<strong>Definition</strong>
+A <strong>layer</strong> is a function that takes a <em>vector</em> in and produces a <em>vector</em> out. Vector in → vector out. That's all.
+</div>
+
+<p>Recall from the Vectors chapter that a vector is just a fixed-length list of numbers — in microGPT, usually 16 of them (<code>nEmbd = 16</code>). A layer reads those 16 numbers and produces a new list of numbers. Stack several layers and the output of one becomes the input of the next, like a pipeline:</p>
+
+<div class="math-block">
+[16 numbers] → <span class="math">layer</span> → [16 numbers] → <span class="math">layer</span> → [16 numbers] → ...
+</div>
+
+<p>Most layers do their work with a <strong>matrix multiplication</strong>, which sounds scary and turns out to be a glorified weighted average. Let's build it.</p>
+
+<h2>2. The linear layer — matrix multiplication</h2>
+
+<p>The <code>linear</code> function is the workhorse of the entire model. Here is the complete Java code:</p>
+
+<pre><code class="language-java">static Value[] linear(Value[] x, Value[][] w) {
+    Value[] out = new Value[w.length];
+    for (int i = 0; i &lt; w.length; i++) {       // for each output slot
+        out[i] = Value.of(0);
+        for (int j = 0; j &lt; x.length; j++)      // sum over all inputs
+            out[i] = out[i].add(w[i][j].mul(x[j]));
+    }
+    return out;
+}</code></pre>
+
+<p>Read it slowly. <code>x</code> is the input vector. <code>w</code> is a grid of weights (a matrix — a list of rows, each row a list of numbers). For each output slot <code>i</code>, we walk every input <code>x[j]</code>, multiply it by the matching weight <code>w[i][j]</code>, and add up the results. <strong>Each output is the weighted sum of all the inputs.</strong></p>
+
+<div class="box tip">
+<strong>The voting analogy</strong>
+Think of each output as a <em>committee vote</em>. The committee looks at every input value, but it trusts some inputs more than others — those trust levels are the weights. A weight of 0 means "ignore this input entirely"; a large weight means "this input matters a lot to my decision"; a negative weight means "this input <em>argues against</em> my output". One row of the matrix = one committee = one output number. The whole point of training is to discover the right weights.
+</div>
+
+<h3>A tiny worked example</h3>
+
+<p>Let the input be <code>x = [2, 3]</code> and the weight matrix be:</p>
+
+<div class="math-block">
+w = [ [1, 0],&nbsp;&nbsp;[0.5, 0.5] ]
+</div>
+
+<p>Two rows → two outputs. Compute each as "row dotted with input":</p>
+
+<ul>
+<li><strong>out[0]</strong> = row [1, 0] → <span class="math">1×2 + 0×3 = 2</span>. (This committee only listens to the first input.)</li>
+<li><strong>out[1]</strong> = row [0.5, 0.5] → <span class="math">0.5×2 + 0.5×3 = 2.5</span>. (This one averages both inputs equally.)</li>
+</ul>
+
+<div class="math-block">
+linear([2, 3]) = [2, 2.5]
+</div>
+
+<p>In microGPT, when you see <code>linear(x, sd.get("layer0.attn_wq"))</code>, this exact loop runs on a 16×16 weight matrix: it reads a 16-element vector and produces a new 16-element vector, where each of the 16 outputs is a different weighted blend of all 16 inputs.</p>
+
+<div class="box tip">
+<strong>Concrete example</strong>
+<p><strong>Input</strong> (3 numbers): <code>x = [0.5, &minus;0.3, 0.8]</code></p>
+<p><strong>Weight matrix</strong> (2 rows &times; 3 cols, so it maps 3D &rarr; 2D):
+<code>[[0.1, 0.4, &minus;0.2], [0.3, &minus;0.1, 0.5]]</code></p>
+<p><strong>Output</strong> (each row dotted with the input):</p>
+<p><code>out[0] = 0.1&times;0.5 + 0.4&times;(&minus;0.3) + (&minus;0.2)&times;0.8 = &minus;0.23</code></p>
+<p><code>out[1] = 0.3&times;0.5 + (&minus;0.1)&times;(&minus;0.3) + 0.5&times;0.8 = 0.58</code></p>
+<p>Result: <code>[&minus;0.23, 0.58]</code>. A 3-number representation became a 2-number one —
+the matrix sets both the blend <em>and</em> the output size.</p>
+</div>
+
+<div class="box tip">
+<strong>Real-life analogy</strong>
+A linear layer is a translator. It converts information from one "language"
+(say, a 16-dimensional space) into another (a 64-dimensional space). Just like
+translating French to English, the <em>meaning</em> is preserved but the
+representation changes. The weight matrix is the "dictionary" that defines exactly
+how to translate one into the other — and training is the model writing its own dictionary.
+</div>
+
+<div class="demo">
+<h4>Demo: a 2×2 linear layer — drag the sliders, watch the output</h4>
+<canvas id="linearCanvas" width="600" height="240"></canvas>
+<div class="controls">
+<label>w[0][0] <input type="range" id="w00" min="-2" max="2" step="0.1" value="1"></label>
+<label>w[0][1] <input type="range" id="w01" min="-2" max="2" step="0.1" value="0"></label>
+<label>w[1][0] <input type="range" id="w10" min="-2" max="2" step="0.1" value="0.5"></label>
+<label>w[1][1] <input type="range" id="w11" min="-2" max="2" step="0.1" value="0.5"></label>
+</div>
+<div class="controls">
+<label>x[0] <input type="range" id="x0" min="-5" max="5" step="0.5" value="2"></label>
+<label>x[1] <input type="range" id="x1" min="-5" max="5" step="0.5" value="3"></label>
+</div>
+<div class="output" id="linearOut"></div>
+</div>
+
+<h2>3. ReLU — the activation function</h2>
+
+<p>Here is the entire ReLU layer in the transformer — one line:</p>
+
+<pre><code class="language-java">for (int i = 0; i &lt; x.length; i++)
+    x[i] = x[i].relu();      // relu(v) = max(0, v)</code></pre>
+
+<p>ReLU ("Rectified Linear Unit") is almost laughably simple: <strong>keep positive numbers as they are, replace every negative number with zero.</strong> <code>relu(3) = 3</code>, <code>relu(-3) = 0</code>, <code>relu(0) = 0</code>. That's the whole function.</p>
+
+<div class="box tip">
+<strong>Concrete example</strong>
+<p><strong>Input</strong> (4 numbers, say one slice of the hidden vector):
+<code>[&minus;0.23, 0.58, &minus;1.2, 0.03]</code></p>
+<p><strong>Output:</strong> <code>[0, 0.58, 0, 0.03]</code></p>
+<p>Every negative number was clamped to 0; the positives passed through untouched. That
+single kink — flat for negatives, straight-through for positives — is the non-linearity
+that lets stacked layers learn curved patterns.</p>
+</div>
+
+<div class="box tip">
+<strong>Real-life analogy</strong>
+ReLU is a bouncer at a club. It lets positive signals through unchanged but blocks
+all negative signals (sets them to zero) — like a bouncer who waves in anyone with a
+valid ID (positive) and turns away everyone without one (negative). This simple "gate"
+is what gives neural networks the ability to learn complex, non-linear patterns.
+</div>
+
+<h3>Why bother? Because without it, the network is fake</h3>
+
+<div class="box warn">
+<strong>The crucial reason</strong>
+Stacking linear layers with nothing between them is <em>pointless</em>. Two matrix multiplications in a row can always be collapsed into a single matrix multiplication — mathematically, <code>linear(linear(x))</code> equals <code>linear'(x)</code> for some other weights. So a hundred stacked linear layers would have exactly the same power as one. You need something <strong>non-linear</strong> in between to break that collapse and let the network represent complicated, curved relationships. ReLU is the simplest possible non-linearity that does the job.
+</div>
+
+<p>"Non-linear" just means "not a straight line". The kink in ReLU at zero — straight along the bottom, then bending upward — is enough curvature that, when you stack many of them, the network can approximate almost any function. It is the bend that gives the model its expressive power.</p>
+
+<div class="box info">
+<strong>But why ReLU specifically — why not something fancier?</strong>
+Because ReLU (<code>max(0, x)</code>) is the <em>simplest</em> thing that breaks the linear collapse, and simple wins here. It's trivial to compute and trivial to differentiate — the slope is just 1 when positive, 0 when negative. Fancier curves exist: GPT-2 used GeLU, a smoothed version, and the earliest networks used sigmoid. But sigmoid is slower and suffers from vanishing gradients, and for a toy model the extra polish buys nothing. ReLU does the one job a non-linearity must do, at the lowest possible cost.
+</div>
+
+<div class="demo">
+<h4>Demo: the ReLU function — move the input, see it clamp at zero</h4>
+<canvas id="reluCanvas" width="600" height="300"></canvas>
+<div class="controls">
+<label>input x: <input type="range" id="reluX" min="-5" max="5" step="0.1" value="-2"></label>
+<span id="reluOut" class="math"></span>
+</div>
+<p style="font-size:.85em;color:#666;margin:8px 0 0">Left of zero the line lies flat on the floor (output 0). Right of zero it rises straight up (output = input). The red dot is your value passing through the gate.</p>
+</div>
+
+<p>In microGPT, ReLU lives in the MLP block, applied to every element of the widened hidden vector. It is the model's only source of non-linearity in that block.</p>
+
+<h2>4. RMSNorm — keeping numbers civilized</h2>
+
+<p>As a vector flows through many layers, its numbers can drift — growing into the thousands or shrinking toward zero. Either extreme makes training unstable (gradients explode or vanish). <strong>Normalization</strong> rescales the vector back into a sane range at each step. microGPT uses <strong>RMSNorm</strong>:</p>
+
+<pre><code class="language-java">static Value[] rmsnorm(Value[] x) {
+    Value ms = Value.of(0);
+    for (Value xi : x)
+        ms = ms.add(xi.mul(xi));        // sum of squares
+    ms = ms.div(Value.of(x.length));    // mean of squares
+    Value scale = ms.add(Value.of(1e-5)).pow(-0.5);  // 1 / sqrt(ms)
+    return Arrays.stream(x)
+        .map(xi -> xi.mul(scale))       // divide every element by RMS
+        .toArray(Value[]::new);
+}</code></pre>
+
+<p>"RMS" means <strong>Root Mean Square</strong> — read it right-to-left: square every number, take the mean (average) of those squares, then take the square root. It is a measure of "how big, on average, are the numbers in this vector". RMSNorm divides every element by that single number, so the whole vector is scaled to a consistent overall size.</p>
+
+<div class="box info">
+<strong>But why do we need normalization at all?</strong>
+Because every layer multiplies and adds, and those operations compound. After a few blocks a vector's numbers can balloon into the thousands (overflow) or collapse toward zero (underflow), and either way the gradients that depend on them explode or vanish — training stalls. RMSNorm is the <em>volume control</em>: after each block it rescales the vector back to a consistent magnitude, so the next block always receives numbers in a sane range. It resets the loudness without changing the tune.
+</div>
+
+<div class="box tip">
+<strong>Real-life analogy</strong>
+RMSNorm is the "normalize volume" feature on Spotify. Without it, some songs blast
+loud and others are barely audible; Spotify rescales every track to a consistent level
+so you're not constantly reaching for the volume knob. RMSNorm does the same for the
+vectors flowing through the network — keeping their magnitude steady so numbers never
+blast too loud or fade to silence as they pass through layer after layer.
+</div>
+
+<h3>Step by step with numbers</h3>
+
+<p>Take the input vector <code>x = [4, 3]</code>:</p>
+
+<table>
+<tr><th style="width:200px">Step</th><th>Calculation</th><th>Result</th></tr>
+<tr><td>Square each element</td><td>4² = 16,&nbsp;&nbsp;3² = 9</td><td>[16, 9]</td></tr>
+<tr><td>Mean of squares (<code>ms</code>)</td><td>(16 + 9) / 2</td><td>12.5</td></tr>
+<tr><td>Root → RMS</td><td>√12.5</td><td>≈ 3.54</td></tr>
+<tr><td>Divide each element</td><td>4 / 3.54,&nbsp;&nbsp;3 / 3.54</td><td><strong>[1.13, 0.85]</strong></td></tr>
+</table>
+
+<p>Notice what survived and what changed. The raw sizes shrank from [4, 3] down to roughly [1.13, 0.85] — much tamer. But the <strong>relative proportions are preserved</strong>: 4 was bigger than 3, and 1.13 is still bigger than 0.85 by the same ratio. RMSNorm doesn't distort the <em>shape</em> of the information; it only fixes the <em>scale</em>. (The tiny <code>1e-5</code> in the code — "epsilon" — is just insurance so we never divide by zero on an all-zeros vector.)</p>
+
+<div class="box tip">
+<strong>Concrete example</strong>
+<p><strong>Input:</strong> <code>[3.0, &minus;1.0, 2.0]</code></p>
+<p><strong>RMS</strong> = <code>&radic;((3&sup2; + (&minus;1)&sup2; + 2&sup2;) / 3)</code> =
+<code>&radic;(14/3)</code> = <code>&radic;4.67</code> &asymp; <code>2.16</code></p>
+<p><strong>Output</strong> (divide each by the RMS):
+<code>[3.0/2.16, &minus;1.0/2.16, 2.0/2.16]</code> = <code>[1.39, &minus;0.46, 0.93]</code></p>
+<p>The vector keeps its shape — <code>3</code> is still the biggest, the negative is still
+negative — but its overall magnitude is pulled back to about 1, so numbers can't snowball
+as the vector flows through layer after layer.</p>
+</div>
+
+<div class="demo">
+<h4>Demo: RMSNorm — type a vector, watch the rescale</h4>
+<canvas id="rmsCanvas" width="600" height="260"></canvas>
+<div class="controls">
+<label>vector (comma-separated): <input type="text" id="rmsInput" value="4, 3" style="width:200px"></label>
+<button id="rmsRun">Normalize</button>
+<button id="rmsExtreme">Try extreme: 800, 600</button>
+</div>
+<div class="output" id="rmsOut"></div>
+<p style="font-size:.85em;color:#666;margin:8px 0 0">Blue bars = input, green bars = after RMSNorm. Try huge values like 800, 600 — the output stays the same civilized shape as 4, 3 did.</p>
+</div>
+
+<div class="box info">
+<strong>RMSNorm vs. LayerNorm</strong>
+You may meet <strong>LayerNorm</strong> elsewhere (GPT-2 used it). It does the same job but first subtracts the mean of the vector, then divides by the standard deviation. RMSNorm skips the mean-subtraction step — it just divides by the RMS. Simpler, fewer operations, and in practice works just as well. Same idea, leaner code. microGPT chose the simpler one.
+</div>
+
+<h2>5. Putting layers together: the MLP block</h2>
+
+<p>Now watch real layers compose. The "MLP block" (Multi-Layer Perceptron) is one of the two engines inside a transformer, and it is built entirely from the three layers above:</p>
+
+<pre><code class="language-java">x = rmsnorm(x);                          // normalize
+x = linear(x, sd.get("layer0.mlp_fc1")); // expand: 16 → 64
+for (int i = 0; i &lt; x.length; i++)
+    x[i] = x[i].relu();                  // non-linearity
+x = linear(x, sd.get("layer0.mlp_fc2")); // compress: 64 → 16</code></pre>
+
+<p>Four steps, and you already understand all four:</p>
+
+<ol>
+<li><strong>Normalize</strong> with RMSNorm so the numbers start in a sane range.</li>
+<li><strong>Expand</strong> with a linear layer: a 16×64 weight matrix turns 16 numbers into 64. (<code>4 * nEmbd = 64</code> in the code.)</li>
+<li><strong>ReLU</strong> every one of those 64 numbers — the non-linearity that gives the block its power.</li>
+<li><strong>Compress</strong> with another linear layer: a 64×16 matrix squeezes back down to 16.</li>
+</ol>
+
+<div class="math-block">
+16&nbsp; →<span style="color:#888"> (expand) </span>→&nbsp; 64&nbsp; →<span style="color:#888"> (ReLU) </span>→&nbsp; 64&nbsp; →<span style="color:#888"> (compress) </span>→&nbsp; 16
+</div>
+
+<div class="box tip">
+<strong>Why expand then compress?</strong>
+The wide middle layer (64 slots) gives the network extra <em>thinking room</em>. With only 16 slots there isn't space to disentangle complex patterns; blowing up to 64, applying the non-linearity there, then folding back down to 16 lets the block compute a much richer transformation than its narrow input and output sizes would suggest. The 64-wide layer is scratch paper the model does its rough work on before writing the clean 16-number answer.
+</div>
+
+<div class="box tip">
+<strong>Real-life analogy</strong>
+The MLP is brainstorming, then summarizing. Expanding 16 → 64 is the brainstorm —
+spread out and generate lots of rough ideas. ReLU is the filter — throw out the bad
+ideas. Compressing 64 → 16 is the summary — fold everything back down into a few key
+insights. The wide middle layer simply gives the network more room to "think" before
+condensing back to a compact answer.
+</div>
+
+<h2>6. Residual connections — "describe the change, not the whole thing"</h2>
+
+<p>One last piece glues the blocks together. After the MLP (and after attention), microGPT does this:</p>
+
+<pre><code class="language-java">for (int i = 0; i &lt; nEmbd; i++)
+    x[i] = x[i].add(xr[i]);   // add the block's output back to its input</code></pre>
+
+<p>Here <code>xr</code> is the vector as it was <em>before</em> the block ran, saved aside. Instead of replacing the input with the block's output, we <strong>add</strong> them. The block therefore only has to learn a small <em>correction</em> to apply to what came in — not reconstruct the whole vector from scratch. This is called a <strong>residual connection</strong> (or "skip connection").</p>
+
+<div class="box tip">
+<strong>The directions analogy</strong>
+Suppose you're guiding someone to a destination. You could re-describe their exact position from absolute zero every single step — exhausting and error-prone. Or you could just say "take two steps left" — a small correction relative to where they already are. Residual connections are the second style: each block says <em>"here's a small nudge to add"</em>, and the running vector <code>x</code> carries the accumulated position forward.
+</div>
+
+<div class="box info">
+<strong>Why it matters for learning</strong>
+Residuals also keep gradients healthy. Because the input <code>xr</code> is added straight through, the <code>add</code> operation passes gradient back to <code>xr</code> with a local grad of 1 (remember from the autograd chapter: <code>add</code> has gradient 1 to each child). That creates an unbroken "gradient highway" from the loss all the way back to the early layers, so deep stacks of blocks can still learn. Without residuals, gradients shrink as they travel back through many layers and the early layers barely train — the infamous <em>vanishing gradient</em> problem.
+</div>
+
+<h2>Recap</h2>
+
+<div class="box info">
+<strong>What you now know</strong>
+<ul style="margin-bottom:0">
+<li>A <strong>layer</strong> is a function: vector in → vector out.</li>
+<li><strong>linear</strong> is matrix multiplication — each output is a weighted vote over all inputs. The weights are what training adjusts.</li>
+<li><strong>ReLU</strong> = <code>max(0, x)</code>: the simplest non-linearity, and without it stacked linear layers collapse into one.</li>
+<li><strong>RMSNorm</strong> divides a vector by its root-mean-square, taming the scale while preserving proportions, so training stays stable.</li>
+<li>The <strong>MLP block</strong> chains them: normalize → expand 16→64 → ReLU → compress 64→16.</li>
+<li><strong>Residual connections</strong> add the block's output back to its input, so each block learns a small correction and gradients flow cleanly to the bottom.</li>
+</ul>
+</div>
+
+<p>These are the generic building blocks. The next chapter introduces the one layer that makes a transformer a <em>transformer</em> — <strong>attention</strong> — which lets each position in the sequence look at the others.</p>
+
+<div class="page-nav"></div>
+</main>
+
+<script src="../js/nav.js"></script>
+<script src="../js/highlight.js"></script>
+<script>
+// ─────────────────────────────────────────────────────────
+// Demo 1: 2x2 linear layer  out = W · x
+// ─────────────────────────────────────────────────────────
+(function () {
+  const cv = document.getElementById('linearCanvas');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const out = document.getElementById('linearOut');
+  const ids = ['w00', 'w01', 'w10', 'w11', 'x0', 'x1'];
+  const el = {};
+  ids.forEach(id => el[id] = document.getElementById(id));
+
+  function bar(x, y, len, color, label) {
+    ctx.fillStyle = color;
+    const w = len * 22;
+    ctx.fillRect(x, y - 11, w, 22);
+    ctx.fillStyle = '#1a1a2e';
+    ctx.font = '13px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(label, x + (w >= 0 ? w + 6 : 6), y + 4);
+  }
+
+  function draw() {
+    const w00 = +el.w00.value, w01 = +el.w01.value,
+          w10 = +el.w10.value, w11 = +el.w11.value,
+          x0 = +el.x0.value, x1 = +el.x1.value;
+    const o0 = w00 * x0 + w01 * x1;
+    const o1 = w10 * x0 + w11 * x1;
+
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillStyle = '#3a0ca3';
+    ctx.textAlign = 'left';
+    ctx.fillText('INPUT  x', 30, 30);
+    ctx.fillText('MATRIX  W', 230, 30);
+    ctx.fillText('OUTPUT  W·x', 430, 30);
+
+    // input bars
+    const cx = 110;
+    bar(cx, 70, x0, '#3498db', 'x0=' + x0);
+    bar(cx, 110, x1, '#3498db', 'x1=' + x1);
+
+    // matrix grid
+    ctx.font = '13px monospace';
+    ctx.fillStyle = '#1a1a2e';
+    ctx.textAlign = 'center';
+    const mx = 250, my = 70, gap = 60;
+    [[w00, w01], [w10, w11]].forEach((row, i) => {
+      row.forEach((v, j) => {
+        ctx.strokeStyle = '#9b59b6';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(mx + j * gap - 26, my + i * 36 - 16, 52, 28);
+        ctx.fillText(v.toFixed(1), mx + j * gap, my + i * 36 + 4);
+      });
+    });
+
+    // output bars
+    const ox = 470;
+    bar(ox, 70, o0, '#2ecc71', '= ' + o0.toFixed(2));
+    bar(ox, 110, o1, '#2ecc71', '= ' + o1.toFixed(2));
+
+    // formula
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#555';
+    ctx.font = '12px monospace';
+    ctx.fillText('out[0] = ' + w00.toFixed(1) + '·' + x0 + ' + ' + w01.toFixed(1) + '·' + x1 + ' = ' + o0.toFixed(2), 30, 180);
+    ctx.fillText('out[1] = ' + w10.toFixed(1) + '·' + x0 + ' + ' + w11.toFixed(1) + '·' + x1 + ' = ' + o1.toFixed(2), 30, 205);
+
+    out.textContent = 'input [' + x0 + ', ' + x1 + ']  →  output [' + o0.toFixed(2) + ', ' + o1.toFixed(2) + ']';
+  }
+
+  ids.forEach(id => el[id].addEventListener('input', draw));
+  draw();
+})();
+
+// ─────────────────────────────────────────────────────────
+// Demo 2: ReLU curve
+// ─────────────────────────────────────────────────────────
+(function () {
+  const cv = document.getElementById('reluCanvas');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const slider = document.getElementById('reluX');
+  const out = document.getElementById('reluOut');
+  const W = cv.width, H = cv.height;
+  const ox = W / 2, oy = H - 50, sx = 45, sy = 38;
+  const fx = x => ox + x * sx;
+  const fy = y => oy - y * sy;
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    // axes
+    ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(W, oy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ox, 0); ctx.lineTo(ox, H); ctx.stroke();
+    ctx.fillStyle = '#aaa'; ctx.font = '11px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('0', ox, oy + 16);
+    ctx.fillText('input →', W - 40, oy + 16);
+
+    // ReLU curve: flat then 45°
+    ctx.strokeStyle = '#4361ee'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(fx(-5), fy(0));
+    ctx.lineTo(fx(0), fy(0));
+    ctx.lineTo(fx(5), fy(5));
+    ctx.stroke();
+
+    // point
+    const x = +slider.value;
+    const y = Math.max(0, x);
+    // guide lines
+    ctx.strokeStyle = '#e74c3c'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(fx(x), oy); ctx.lineTo(fx(x), fy(y)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ox, fy(y)); ctx.lineTo(fx(x), fy(y)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath(); ctx.arc(fx(x), fy(y), 6, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = '#1a1a2e'; ctx.font = '12px monospace'; ctx.textAlign = 'left';
+    ctx.fillText('output', ox + 6, fy(5) + 4);
+
+    out.innerHTML = 'relu(' + x.toFixed(1) + ') = max(0, ' + x.toFixed(1) + ') = <strong>' + y.toFixed(1) + '</strong>'
+      + (x < 0 ? '  (negative → clamped to 0)' : '  (positive → passes through)');
+  }
+  slider.addEventListener('input', draw);
+  draw();
+})();
+
+// ─────────────────────────────────────────────────────────
+// Demo 3: RMSNorm
+// ─────────────────────────────────────────────────────────
+(function () {
+  const cv = document.getElementById('rmsCanvas');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const out = document.getElementById('rmsOut');
+  const input = document.getElementById('rmsInput');
+
+  function parseVec(s) {
+    return s.split(',').map(t => parseFloat(t.trim())).filter(v => !isNaN(v));
+  }
+
+  function draw() {
+    const x = parseVec(input.value);
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    if (x.length === 0) { out.textContent = 'Enter some numbers.'; return; }
+
+    const ms = x.reduce((s, v) => s + v * v, 0) / x.length;
+    const rms = Math.sqrt(ms + 1e-5);
+    const y = x.map(v => v / rms);
+
+    // scaling: pick a max across both so bars are comparable but readable
+    const maxIn = Math.max(...x.map(Math.abs), 0.001);
+    const maxOut = Math.max(...y.map(Math.abs), 0.001);
+    const n = x.length;
+    const slotW = Math.min(70, (cv.width - 80) / n);
+    const baseInY = 100, baseOutY = 230;
+
+    ctx.font = 'bold 13px sans-serif'; ctx.fillStyle = '#3a0ca3'; ctx.textAlign = 'left';
+    ctx.fillText('INPUT', 10, 30);
+    ctx.fillText('RMSNORM OUTPUT', 10, 165);
+
+    ctx.textAlign = 'center'; ctx.font = '11px monospace';
+    for (let i = 0; i < n; i++) {
+      const cx = 70 + i * slotW;
+      // input bar (blue), height relative to maxIn
+      const hIn = (x[i] / maxIn) * 60;
+      ctx.fillStyle = '#3498db';
+      ctx.fillRect(cx - 14, baseInY - Math.max(hIn, 0), 28, Math.abs(hIn));
+      if (hIn < 0) ctx.fillRect(cx - 14, baseInY, 28, -hIn);
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillText(x[i].toFixed(1), cx, baseInY + (hIn >= 0 ? 16 : -Math.abs(hIn) - 6));
+
+      // output bar (green), height relative to maxOut
+      const hOut = (y[i] / maxOut) * 60;
+      ctx.fillStyle = '#2ecc71';
+      ctx.fillRect(cx - 14, baseOutY - Math.max(hOut, 0), 28, Math.abs(hOut));
+      if (hOut < 0) ctx.fillRect(cx - 14, baseOutY, 28, -hOut);
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillText(y[i].toFixed(2), cx, baseOutY + (hOut >= 0 ? 16 : -Math.abs(hOut) - 6));
+    }
+
+    out.textContent =
+      'mean of squares = ' + ms.toFixed(3) +
+      '   →   RMS = √' + ms.toFixed(2) + ' = ' + rms.toFixed(3) +
+      '   →   output = [' + y.map(v => v.toFixed(2)).join(', ') + ']';
+  }
+
+  document.getElementById('rmsRun').addEventListener('click', draw);
+  input.addEventListener('keyup', e => { if (e.key === 'Enter') draw(); });
+  document.getElementById('rmsExtreme').addEventListener('click', () => {
+    input.value = '800, 600'; draw();
+  });
+  draw();
+})();
+</script>
+</body>
+</html>

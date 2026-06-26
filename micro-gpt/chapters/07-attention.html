@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Attention Mechanism — MicroGPT Course</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<button id="hamburger">&#9776;</button>
+<nav id="sidebar"></nav>
+<div class="progress-bar"><div class="fill"></div></div>
+<main id="content">
+
+<h1>The Attention Mechanism</h1>
+<p class="subtitle">
+  <span class="difficulty advanced">Advanced</span>
+  &nbsp; Query, Key, Value — the one idea that makes transformers work.
+</p>
+
+<div class="box info">
+  <strong>This is the chapter that matters most.</strong>
+  Everything before this — vectors, embeddings, softmax, neural network layers — was preparation.
+  Attention is the mechanism the "T" in GPT (Transformer) is built around. If you understand this
+  chapter, you understand the heart of ChatGPT. Take it slowly.
+</div>
+
+<h2>1. The core intuition: not everything matters equally</h2>
+
+<p>
+  A GPT predicts the next character by looking at the characters that came before. But here's the key
+  insight: <strong>when you're guessing the next letter, the previous letters are not all equally useful.</strong>
+</p>
+
+<p>Imagine the model has seen these letters and must guess what comes next:</p>
+
+<div class="math-block">
+  A &nbsp; l &nbsp; e &nbsp; x &nbsp; a &nbsp; n &nbsp; d &nbsp; r &nbsp; <strong>?</strong>
+</div>
+
+<p>
+  What's the next letter? Probably <code>a</code> (to spell "Alexandra") or <code>o</code> ("Alexandro").
+  To make that guess well, which earlier letters should you pay attention to?
+</p>
+
+<ul>
+  <li>The capital <code>A</code> at the very start tells you this is a name and hints at the whole "Alexand-" family.</li>
+  <li>The recent <code>r</code> tells you you're near the end of the stem.</li>
+  <li>The <code>l</code> in the middle? Barely relevant to the next letter at all.</li>
+</ul>
+
+<p>
+  A naive model would mush all nine previous letters together with equal weight. Attention does
+  something smarter: it lets the model <strong>choose</strong>, for each prediction, how much to focus
+  on each previous position. Some get a lot of focus, some get almost none. Those focus amounts are
+  learned during training.
+</p>
+
+<div class="box tip">
+  <strong>One sentence definition.</strong>
+  Attention is a weighted average of past information, where the model itself computes the weights based
+  on what it's currently looking for.
+</div>
+
+<div class="box tip">
+  <strong>Real-life analogy</strong>
+  Attention is a cocktail party. You're in a noisy room (many positions in the sequence)
+  and can't listen to everyone equally. So you decide <em>who</em> to focus on based on
+  what you're looking for (your query) and what each person is saying (their key), then you
+  take a weighted mix of what those people actually say (their value). Multi-head attention,
+  later in this chapter, is like following four conversations at once — each tuned to a
+  different topic.
+</div>
+
+<h2>2. Query, Key, Value — the QKV pattern</h2>
+
+<p>
+  The mechanism has three pieces with intimidating names: <strong>Query</strong>, <strong>Key</strong>,
+  and <strong>Value</strong>. The names come from databases and search engines, and the search-engine
+  analogy is the fastest way in.
+</p>
+
+<h3>The YouTube search analogy</h3>
+
+<p>Think about what happens when you search YouTube for "funny cat videos":</p>
+
+<table>
+  <tr><th>Search concept</th><th>What it is</th><th>In attention</th></tr>
+  <tr>
+    <td><strong>Query</strong></td>
+    <td>What you type into the search bar: <em>"funny cat videos"</em></td>
+    <td>What the current position is looking for</td>
+  </tr>
+  <tr>
+    <td><strong>Key</strong></td>
+    <td>The title and tags of every video in the database</td>
+    <td>What each past position advertises about itself</td>
+  </tr>
+  <tr>
+    <td><strong>Value</strong></td>
+    <td>The actual video you watch</td>
+    <td>The actual information each past position carries</td>
+  </tr>
+  <tr>
+    <td><strong>Score</strong></td>
+    <td>How well your query matches a video's title/tags</td>
+    <td>How much attention to pay to that position</td>
+  </tr>
+  <tr>
+    <td><strong>Result</strong></td>
+    <td>A feed blended from the best-matching videos</td>
+    <td>A blend of values, weighted by the scores</td>
+  </tr>
+</table>
+
+<p>
+  You type one query. It gets compared against every video's key. The videos whose keys match your
+  query best get shown the most. The thing you actually receive is the <em>content</em> (the value) of
+  those videos, mixed together according to how well they matched.
+</p>
+
+<p>Attention does exactly this, but the "search" happens for every position in the sequence:</p>
+
+<div class="columns">
+  <div class="col">
+    <h4>Query — "what am I looking for?"</h4>
+    <p>Computed from the <strong>current</strong> position's vector. It encodes the question this position is asking of the past.</p>
+  </div>
+  <div class="col">
+    <h4>Key — "what do I contain?"</h4>
+    <p>Computed from <strong>each past</strong> position's vector. It's that position advertising what it's about.</p>
+  </div>
+</div>
+<div class="columns">
+  <div class="col">
+    <h4>Value — "what info do I carry?"</h4>
+    <p>Also computed from <strong>each past</strong> position. It's the actual content that gets passed forward if this position is attended to.</p>
+  </div>
+  <div class="col">
+    <h4>Where do Q, K, V come from?</h4>
+    <p>Each is just the position's embedding vector multiplied by a learned weight matrix (a <code>Linear</code> layer from Chapter&nbsp;6). Same input, three different transforms.</p>
+  </div>
+</div>
+
+<div class="box info">
+  <strong>They're all derived from the same vector.</strong>
+  A position starts as one 16-number embedding vector. We run it through three separate linear layers
+  to get its query, its key, and its value. The model learns those three weight matrices so that the
+  resulting queries and keys line up usefully.
+</div>
+
+<div class="box info">
+  <strong>But why Query, Key, Value — why not just compare the embeddings directly?</strong>
+  A raw embedding encodes "what this character <em>is</em>." But attention needs two more things: what a
+  position is <em>looking for</em> (its query) and what it <em>offers</em> to others (its key) — and those
+  are not the same as its identity. The three linear layers (<code>wq</code>, <code>wk</code>,
+  <code>wv</code>) learn those separate roles. The same character <code>a</code> might look for completely
+  different things depending on context, which a single fixed embedding could never express on its own.
+</div>
+
+<h2>3. Step by step, with real numbers</h2>
+
+<p>
+  Let's work a complete example by hand using the three-letter sequence <strong>"cat"</strong>. Three
+  positions: <code>c</code> (position 0), <code>a</code> (position 1), <code>t</code> (position 2).
+</p>
+
+<p>
+  In the real code each position is a 16-dimensional vector. Sixteen numbers per step is too many to
+  follow on paper, so for this worked example we'll pretend each position is only <strong>4 numbers</strong>.
+  The logic is identical; only the count changes.
+</p>
+
+<h3>Step A — start with the embedded positions</h3>
+
+<p>After embedding (Chapter 3), suppose our three letters became these vectors:</p>
+
+<div class="math-block">
+  c = [1.0, &nbsp;0.0, &nbsp;1.0, &nbsp;0.0]<br>
+  a = [0.0, &nbsp;1.0, &nbsp;0.0, &nbsp;1.0]<br>
+  t = [1.0, &nbsp;1.0, &nbsp;0.0, &nbsp;0.0]
+</div>
+
+<h3>Step B — make Q, K, V with linear transforms</h3>
+
+<p>
+  We pass each vector through three learned weight matrices. The actual numbers in those matrices were
+  learned during training; here we'll just show the <em>result</em> of applying them. Each letter now
+  has a query, a key, and a value (still 4 numbers each):
+</p>
+
+<table>
+  <tr><th>Position</th><th>Query (Q)</th><th>Key (K)</th><th>Value (V)</th></tr>
+  <tr><td>c</td><td>[1.0, 0.2, 0.1, 0.0]</td><td>[0.9, 0.1, 0.2, 0.0]</td><td>[2.0, 0.0, 1.0, 0.5]</td></tr>
+  <tr><td>a</td><td>[0.1, 1.0, 0.0, 0.3]</td><td>[0.2, 0.9, 0.1, 0.4]</td><td>[0.0, 3.0, 0.0, 1.0]</td></tr>
+  <tr><td>t</td><td>[0.5, 0.5, 0.2, 0.1]</td><td>[0.4, 0.6, 0.0, 0.2]</td><td>[1.0, 1.0, 2.0, 0.0]</td></tr>
+</table>
+
+<h3>Step C — score every query against every key (dot product)</h3>
+
+<p>
+  The match between a query and a key is their <strong>dot product</strong>: multiply matching slots,
+  add them up. A bigger number means a better match. (We covered the dot product in Chapter 2 — it's
+  large when two vectors point the same way.)
+</p>
+
+<p>For example, position <code>t</code>'s query against position <code>c</code>'s key:</p>
+
+<div class="math-block">
+  Q<sub>t</sub> &middot; K<sub>c</sub> = (0.5&times;0.9) + (0.5&times;0.1) + (0.2&times;0.2) + (0.1&times;0.0) = 0.54
+</div>
+
+<p>
+  Do that for every (query, key) pair and you get a 3&times;3 grid of raw scores. Row = the position
+  doing the asking; column = the position being asked about:
+</p>
+
+<table>
+  <tr><th>query &darr; / key &rarr;</th><th>c</th><th>a</th><th>t</th></tr>
+  <tr><td><strong>c</strong></td><td>0.94</td><td>0.39</td><td>0.52</td></tr>
+  <tr><td><strong>a</strong></td><td>0.19</td><td>1.04</td><td>0.70</td></tr>
+  <tr><td><strong>t</strong></td><td>0.54</td><td>0.61</td><td>0.52</td></tr>
+</table>
+
+<h3>Step D — divide by &radic;(headDim)</h3>
+
+<p>
+  Before going further we divide every score by the square root of the vector size. Here the head size
+  is 4, and &radic;4 = 2, so every number gets divided by 2.
+</p>
+
+<div class="box warn">
+  <strong>Why divide at all?</strong>
+  Dot products grow as vectors get longer. With 16-number vectors the raw scores can get large, and
+  large numbers fed into softmax (next step) make it pick <em>one</em> winner almost 100% of the time —
+  a too-confident, "spiky" distribution that's hard to train. Dividing by &radic;(headDim) keeps the
+  scores in a calm range so the model can spread its attention smoothly. This single trick is called
+  "scaled" dot-product attention.
+</div>
+
+<div class="box info">
+  <strong>But why &radic;(headDim) specifically, and not just any constant?</strong>
+  The dot product of two random vectors grows in proportion to their length, so its spread (standard
+  deviation) grows like &radic;(headDim). Dividing by exactly &radic;(headDim) cancels that growth, keeping
+  the variance of the scores around 1 no matter how big the head is. With our tiny <code>headDim = 4</code>
+  it barely matters. But at GPT-2's <code>headDim = 64</code> the un-scaled scores would be roughly 16&times;
+  larger — enough to push softmax into an extreme, near one-hot spike where the gradient vanishes and
+  learning stalls.
+</div>
+
+<p>After dividing the row for query <code>t</code> by 2: [0.27, 0.31, 0.26].</p>
+
+<h3>Step E — softmax each row into weights that sum to 1</h3>
+
+<p>
+  Raw scores aren't percentages. Softmax (Chapter 4) turns each row into positive numbers that add up
+  to exactly 1 — actual attention weights. Applying softmax to query <code>t</code>'s scaled row
+  [0.27, 0.35, 0.30]:
+</p>
+
+<div class="math-block">
+  softmax([0.27, 0.31, 0.26]) = [0.33, &nbsp;0.34, &nbsp;0.33]
+</div>
+
+<p>
+  This says: <em>"When position t makes its prediction, it pays 33% attention to c, 34% to a, and 33%
+  to itself."</em> Every row of the grid becomes a set of weights like this.
+</p>
+
+<h3>Step F — blend the values using those weights</h3>
+
+<p>
+  Finally we take a weighted average of the <strong>value</strong> vectors. For position <code>t</code>,
+  with weights [0.33, 0.34, 0.33]:
+</p>
+
+<div class="math-block">
+  out<sub>t</sub> = 0.33&times;V<sub>c</sub> + 0.34&times;V<sub>a</sub> + 0.33&times;V<sub>t</sub>
+</div>
+<div class="math-block">
+  = 0.33&times;[2,0,1,0.5] + 0.34&times;[0,3,0,1] + 0.33&times;[1,1,2,0]<br>
+  = [0.99, &nbsp;1.35, &nbsp;0.99, &nbsp;0.51]
+</div>
+
+<p>
+  That output vector is what attention produces for position <code>t</code>: a custom blend of the past,
+  mixed according to what <code>t</code> was looking for. Positions <code>c</code> and <code>a</code> get
+  their own blends the same way.
+</p>
+
+<div class="box tip">
+  <strong>Recap of the whole pipeline.</strong>
+  embed &rarr; make Q, K, V &rarr; score (Q&middot;K) &rarr; scale (&divide;&radic;d) &rarr; softmax &rarr;
+  weighted sum of V. Six steps. That's all attention is.
+</div>
+
+<h2>4. The causal mask — why we only look backward</h2>
+
+<p>
+  You may have noticed something in the grid above: position <code>c</code> (the first letter) should
+  <strong>not</strong> be allowed to look at <code>a</code> or <code>t</code>, because those come later.
+  When the model is predicting what follows <code>c</code>, the letters <code>a</code> and <code>t</code>
+  haven't happened yet. Letting it peek would be cheating — it would just copy the answer.
+</p>
+
+<p>
+  GPT is <strong>autoregressive</strong>: it generates one character at a time, left to right, and each
+  prediction may only use the past. So the real attention grid is <strong>triangular</strong>: every
+  position can attend to itself and everything before it, but nothing after.
+</p>
+
+<table>
+  <tr><th>query &darr; / key &rarr;</th><th>c</th><th>a</th><th>t</th></tr>
+  <tr><td><strong>c</strong></td><td>1.00</td><td style="color:#bbb">&mdash;</td><td style="color:#bbb">&mdash;</td></tr>
+  <tr><td><strong>a</strong></td><td>0.40</td><td>0.60</td><td style="color:#bbb">&mdash;</td></tr>
+  <tr><td><strong>t</strong></td><td>0.33</td><td>0.34</td><td>0.33</td></tr>
+</table>
+
+<p>
+  Position <code>c</code> can only attend to itself, so its weight is forced to 1.00. Position
+  <code>a</code> attends to <code>c</code> and <code>a</code>. Only <code>t</code>, the last position,
+  sees all three.
+</p>
+
+<div class="box tip">
+  <strong>Real-life analogy</strong>
+  Causal masking is a "no spoilers" rule. Imagine reading a mystery novel where you're
+  only allowed to see the pages you've already read — you can't flip ahead to find out
+  whodunit. Masking enforces exactly this: position 3 can only attend to positions 0, 1,
+  and 2, never to position 4 or beyond. During generation those future positions don't
+  even exist yet.
+</div>
+
+<div class="box info">
+  <strong>But why force attention to look only backward at all?</strong>
+  Because GPT generates text left to right: when it predicts position 5, positions 6, 7, 8 don't exist yet.
+  If we let the model peek ahead during <em>training</em>, it would learn to lean on information it will never
+  have at <em>generation</em> time — so we make training match the way the model is actually used. (BERT does
+  the opposite: it reads the whole sentence at once with <em>bidirectional</em> attention, because it isn't
+  generating text left to right — it's filling in blanks, so seeing the future is allowed there.)
+</div>
+
+<div class="box info">
+  <strong>How the Java code enforces this — for free.</strong>
+  microGPT doesn't build a fancy mask matrix. It processes tokens one at a time and <em>appends</em> each
+  new key and value to growing lists. When it computes attention for the token at position <code>li</code>,
+  the key and value lists only contain entries up to <code>li</code> — the future literally doesn't exist
+  yet in the lists. Look for this line in the code:
+</div>
+
+<pre><code class="language-java">// As we process each token, we append its key/value to per-layer lists.
+// The lists only ever hold the current token and earlier ones —
+// so attention can never reach a token that hasn't been added yet.
+keys[li].add(k);    // k = this token's key  vector
+values[li].add(v);  // v = this token's value vector</code></pre>
+
+<p>
+  Because the lists grow as generation proceeds, the causal "can only look backward" rule is automatic.
+  No mask needed.
+</p>
+
+<h2>5. Multi-head attention</h2>
+
+<p>
+  So far we described <strong>one</strong> attention computation. Real transformers run several in
+  parallel and call each one a <strong>head</strong>. microGPT uses <code>nHead = 4</code> heads.
+</p>
+
+<p>
+  The embedding is 16 numbers wide (<code>nEmbd = 16</code>). We split that into 4 heads, giving each head
+  <code>headDim = 16 / 4 = 4</code> numbers to work with. Each head does the full QKV-score-softmax-blend
+  dance on its own little 4-number slice.
+</p>
+
+<div class="box tip">
+  <strong>Why split instead of one big head?</strong>
+  Different heads can learn to focus on different things. With names, one head might learn to track
+  "where did the last vowel appear?", another "is this the start of the word?", another "what consonant
+  came just before?". One monolithic attention would have to cram all those jobs into a single set of
+  weights. Four small heads can specialize.
+</div>
+
+<div class="box info">
+  <strong>But why is 4 heads of size 4 more expressive than 1 head of size 16?</strong>
+  Because each head gets its <em>own</em> query/key/value projection, so each can chase a different pattern at
+  the same time — one attending to the previous character, one to vowels, one to the first letter. A single
+  size-16 head has only one set of Q/K/V weights, and therefore one "perspective": it has to average all
+  those jobs into a single attention pattern. Splitting the same 16 dimensions into four independent views
+  costs no extra parameters but buys genuine parallel specialization.
+</div>
+
+<div class="box tip">
+  <strong>Concrete example</strong>
+  <p>
+    Suppose we're processing the letter <code>h</code> in the name <strong>john</strong> — the tokens seen so
+    far are <code>BOS</code>, <code>j</code>, <code>o</code>, and now <code>h</code>. We'll watch
+    <strong>head 0</strong> only.
+  </p>
+  <p>
+    <strong>Input:</strong> <code>h</code>'s vector after embedding + RMSNorm is 16 numbers, e.g.<br>
+    <code>x = [0.12, -0.05, 0.08, 0.21, | -0.11, 0.03, 0.17, -0.09, | 0.06, 0.14, -0.02, 0.10, | 0.19, -0.07, 0.04, 0.13]</code>
+  </p>
+  <p>
+    <strong>Project to a query.</strong> Multiply <code>x</code> by <code>wq</code> to get a 16-number query,
+    then slice it into 4 heads of 4:<br>
+    <code>q = [0.3, -0.1, 0.2, 0.4, | -0.15, 0.25, 0.1, -0.3, | 0.05, 0.18, -0.22, 0.09, | 0.11, -0.04, 0.27, 0.16]</code><br>
+    Head 0 takes the first slice: <code>q&#8320; = [0.3, -0.1, 0.2, 0.4]</code>. That's the question this head
+    is asking of the past.
+  </p>
+  <p>
+    <strong>Score against each earlier key</strong> (head 0's slice of each stored key):<br>
+    <code>k_BOS = [0.1, 0.2, -0.1, 0.3]</code>, <code>k_j = [0.4, -0.2, 0.1, 0.1]</code>, <code>k_o = [-0.1, 0.3, 0.2, -0.2]</code><br>
+    Dot products:
+    <code>q&#8320;&middot;k_BOS = 0.03-0.02-0.02+0.12 = 0.11</code>,
+    <code>q&#8320;&middot;k_j = 0.12+0.02+0.02+0.04 = 0.20</code>,
+    <code>q&#8320;&middot;k_o = -0.03-0.03+0.04-0.08 = -0.10</code><br>
+    Raw scores: <code>[0.11, 0.20, -0.10]</code>.
+  </p>
+  <p>
+    <strong>Scale</strong> by &divide;&radic;4 = &divide;2 &rarr; <code>[0.055, 0.10, -0.05]</code>, then
+    <strong>softmax</strong> &rarr; <code>[0.34, 0.36, 0.31]</code> (sums to ~1 after rounding).
+  </p>
+  <p>
+    <strong>Output:</strong> blend the value vectors with those weights.<br>
+    <code>v_BOS = [0.2, -0.1, 0.3, 0.1]</code>, <code>v_j = [0.1, 0.4, -0.2, 0.3]</code>, <code>v_o = [-0.3, 0.2, 0.1, -0.1]</code><br>
+    <code>out = 0.34&times;v_BOS + 0.36&times;v_j + 0.31&times;v_o &asymp; [0.01, 0.17, 0.06, 0.11]</code>
+  </p>
+  <p>
+    Those four numbers are head 0's summary of "what the sequence so far means for predicting what follows
+    <code>h</code>." Here the weights are nearly even (0.34/0.36/0.31), so this head is spreading its attention
+    across all three earlier tokens rather than fixating on one. The other 3 heads run the same six steps on
+    their own slices; concatenating all four gives the 16-number result.
+  </p>
+</div>
+
+<div class="box info">
+  <strong>Simplified for clarity.</strong>
+  The code below is a pedagogical version that's easier to read than the actual Java port. The real code
+  computes Q, K, V for the full 16-number vector in one shot, then slices per head using offset indexing
+  (<code>Arrays.copyOfRange</code>). It also stores keys/values per <em>layer</em> (not per head), accessing
+  each head's slice via an <code>hs</code> offset. The math is identical — only the data plumbing differs.
+  Chapter 10 has the exact source code.
+</div>
+
+<p>Here's the multi-head loop, annotated (simplified from the actual code for readability):</p>
+
+<pre><code class="language-java">// nHead = 4, headDim = 4, nEmbd = 16  (4 heads * 4 dims = 16)
+List&lt;Value&gt; attnOut = new ArrayList&lt;&gt;();   // we'll fill this with 16 numbers
+
+for (int h = 0; h &lt; nHead; h++) {           // one pass per head
+    int off = h * headDim;                   // this head owns dims [off, off+4)
+
+    // --- Query, Key, Value for THIS head's slice ---
+    List&lt;Value&gt; q = linear(x, attn_wq, off, headDim);  // current token's query
+    List&lt;Value&gt; k = linear(x, attn_wk, off, headDim);  // current token's key
+    List&lt;Value&gt; v = linear(x, attn_wv, off, headDim);  // current token's value
+
+    keys[li * nHead + h].add(k);             // append -> causal growth
+    values[li * nHead + h].add(v);
+
+    // --- Score this query against every stored key ---
+    List&lt;Value&gt; scores = new ArrayList&lt;&gt;();
+    for (List&lt;Value&gt; pastKey : keys[li * nHead + h]) {
+        Value s = dot(q, pastKey).div(Math.sqrt(headDim)); // scaled dot product
+        scores.add(s);
+    }
+
+    List&lt;Value&gt; weights = softmax(scores);   // turn scores into a distribution
+
+    // --- Blend the stored values by those weights ---
+    for (int d = 0; d &lt; headDim; d++) {
+        Value acc = new Value(0);
+        for (int t = 0; t &lt; weights.size(); t++)
+            acc = acc.add(weights.get(t).mul(values[li*nHead+h].get(t).get(d)));
+        attnOut.add(acc);                    // append this head's output dims
+    }
+}
+
+// attnOut now holds 4 heads * 4 dims = 16 numbers, concatenated.
+// One final linear layer mixes them back together:
+List&lt;Value&gt; out = linear(attnOut, attn_wo);   // attn_wo = output projection</code></pre>
+
+<p>The shape of the data as it flows through:</p>
+
+<ol>
+  <li>Input: one 16-number vector for the current token.</li>
+  <li>Split conceptually into 4 slices of 4.</li>
+  <li>Each head produces its own 4-number output.</li>
+  <li><strong>Concatenate</strong> the 4 outputs back into 16 numbers.</li>
+  <li>Run that through <code>attn_wo</code> (the output projection) to get the final 16-number result.</li>
+</ol>
+
+<div class="box info">
+  <strong>Concatenate, then project.</strong>
+  The heads work independently, but the model still needs to combine their findings. Gluing the four
+  4-number outputs into one 16-number vector and passing it through <code>attn_wo</code> lets the model
+  blend "what the vowel-head found" with "what the start-of-word-head found" into a single coherent update.
+</div>
+
+<div class="box info">
+  <strong>But why do we need <code>attn_wo</code> — isn't concatenating the heads enough?</strong>
+  Concatenation just lays the four head outputs side by side; at that point the heads have never actually
+  <em>talked</em> to each other — the result is a stack of independent outputs. The output projection is a
+  linear layer that mixes across all 16 concatenated numbers, letting one head's discovery influence how
+  another head's is used. Without it, the heads stay four sealed-off lanes and the model can't combine their
+  insights.
+</div>
+
+<h2>6. Interactive demo: the attention heatmap</h2>
+
+<p>
+  Type a short word below. The grid shows, for every position (a row), how much attention it pays to
+  each earlier position (a column). Darker blue = more attention. The grid is <strong>triangular</strong>
+  because of the causal mask: a position can never attend to its future. Click any cell to read it out.
+</p>
+
+<div class="demo">
+  <h4>Causal attention heatmap (simulated but plausible weights)</h4>
+  <canvas id="heatCanvas" width="560" height="420"></canvas>
+  <div class="controls">
+    <label>Word:
+      <input type="text" id="heatWord" value="hello" maxlength="9" style="width:120px">
+    </label>
+    <button id="heatGo">Update</button>
+  </div>
+  <div class="output" id="heatOut">Click a cell to inspect a single attention weight.</div>
+</div>
+
+<h2>7. The complete attention code, section by section</h2>
+
+<p>
+  Here is the whole attention block with numbered markers — simplified from the actual Java port
+  for readability (same math, cleaner variable names; see Chapter 10 for the real code). Read each
+  marker's note underneath.
+</p>
+
+<pre><code class="language-java">List&lt;Value&gt; attention(List&lt;Value&gt; x, int li) {
+    List&lt;Value&gt; attnOut = new ArrayList&lt;&gt;();
+
+    for (int h = 0; h &lt; nHead; h++) {                       // (1)
+        int off = h * headDim;
+
+        List&lt;Value&gt; q = linear(x, attn_wq, off, headDim);   // (2)
+        List&lt;Value&gt; k = linear(x, attn_wk, off, headDim);
+        List&lt;Value&gt; v = linear(x, attn_wv, off, headDim);
+
+        keys[li * nHead + h].add(k);                        // (3)
+        values[li * nHead + h].add(v);
+
+        List&lt;Value&gt; scores = new ArrayList&lt;&gt;();
+        for (List&lt;Value&gt; pk : keys[li * nHead + h])         // (4)
+            scores.add(dot(q, pk).div(Math.sqrt(headDim)));
+
+        List&lt;Value&gt; w = softmax(scores);                    // (5)
+
+        for (int d = 0; d &lt; headDim; d++) {                 // (6)
+            Value acc = new Value(0);
+            for (int t = 0; t &lt; w.size(); t++)
+                acc = acc.add(w.get(t).mul(values[li*nHead+h].get(t).get(d)));
+            attnOut.add(acc);
+        }
+    }
+    return linear(attnOut, attn_wo);                        // (7)
+}</code></pre>
+
+<div class="annotation-text"><span class="annotation">1</span> <strong>Loop over heads.</strong> Four independent attention computations, one per head.</div>
+<div class="annotation-text"><span class="annotation">2</span> <strong>Project to Q, K, V.</strong> Three linear layers turn the input slice into this token's query, key, and value.</div>
+<div class="annotation-text"><span class="annotation">3</span> <strong>Append to the growing lists.</strong> This is the causal mask in disguise — only past + present tokens are in the list.</div>
+<div class="annotation-text"><span class="annotation">4</span> <strong>Scaled scores.</strong> Dot the query against every stored key, divided by &radic;(headDim) to keep softmax calm.</div>
+<div class="annotation-text"><span class="annotation">5</span> <strong>Softmax.</strong> Turn raw scores into attention weights that sum to 1.</div>
+<div class="annotation-text"><span class="annotation">6</span> <strong>Weighted sum of values.</strong> Blend the stored value vectors using those weights — this is the head's output.</div>
+<div class="annotation-text"><span class="annotation">7</span> <strong>Output projection.</strong> Concatenated head outputs (16 numbers) pass through <code>attn_wo</code> to produce the final result.</div>
+
+<div class="box tip">
+  <strong>You now understand attention.</strong>
+  The next chapter wraps this block together with the MLP and residual connections from Chapter 6 to
+  form the complete <em>transformer block</em> — the unit that GPT-4 stacks 120 times.
+</div>
+
+<div class="page-nav"></div>
+</main>
+
+<script src="../js/nav.js"></script>
+<script src="../js/highlight.js"></script>
+<script>
+// ── Attention heatmap demo ──────────────────────────────────────────────
+(function () {
+  const canvas = document.getElementById('heatCanvas');
+  const ctx = canvas.getContext('2d');
+  const wordInput = document.getElementById('heatWord');
+  const out = document.getElementById('heatOut');
+
+  let cells = [];       // {x,y,w,h, row, col, weight}
+  let layout = null;    // {n, gridX, gridY, cell, word}
+
+  // Deterministic pseudo-weights so the same word always looks the same.
+  function seededWeight(word, row, col) {
+    // A position attends more to: itself, the first char, and recent chars.
+    const a = word.charCodeAt(col) || 65;
+    const b = word.charCodeAt(row) || 65;
+    let base = 1.0;
+    base += col === 0 ? 1.4 : 0;            // first char gets a boost
+    base += col === row ? 0.9 : 0;          // self-attention
+    base += 1.0 / (1 + (row - col));        // recency: closer past = more
+    base += ((a * 31 + b * 17) % 13) / 22;  // a little learned-looking noise
+    return base;
+  }
+
+  function computeRows(word) {
+    const n = word.length;
+    const rows = [];
+    for (let r = 0; r < n; r++) {
+      const raw = [];
+      for (let c = 0; c <= r; c++) raw.push(seededWeight(word, r, c));
+      // softmax over the allowed (causal) entries
+      const mx = Math.max(...raw);
+      const exp = raw.map(v => Math.exp(v - mx));
+      const sum = exp.reduce((s, v) => s + v, 0);
+      rows.push(exp.map(v => v / sum));
+    }
+    return rows;
+  }
+
+  function draw() {
+    const word = (wordInput.value || '').replace(/[^a-zA-Z]/g, '').toLowerCase() || 'hi';
+    const n = word.length;
+    const rows = computeRows(word);
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    cells = [];
+
+    const pad = 70;
+    const gridSize = Math.min(canvas.width - pad - 20, canvas.height - pad - 20);
+    const cell = gridSize / n;
+    const gridX = pad, gridY = pad;
+    layout = { n, gridX, gridY, cell, word };
+
+    // axis labels
+    ctx.fillStyle = '#333';
+    ctx.font = '14px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('keys (past positions) →', gridX + gridSize / 2, 24);
+    for (let c = 0; c < n; c++)
+      ctx.fillText(word[c], gridX + c * cell + cell / 2, gridY - 16);
+
+    ctx.save();
+    ctx.translate(20, gridY + gridSize / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('queries ↓', 0, 0);
+    ctx.restore();
+    for (let r = 0; r < n; r++)
+      ctx.fillText(word[r], gridX - 16, gridY + r * cell + cell / 2);
+
+    // cells
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        const x = gridX + c * cell, y = gridY + r * cell;
+        if (c > r) {
+          // masked future: light gray hatch
+          ctx.fillStyle = '#f4f4f6';
+          ctx.fillRect(x, y, cell, cell);
+          ctx.strokeStyle = '#e6e6ea';
+          ctx.strokeRect(x, y, cell, cell);
+          continue;
+        }
+        const w = rows[r][c];
+        // white (0) -> dark blue (1)
+        const t = Math.min(1, w * 1.0);
+        const R = Math.round(255 - t * (255 - 24));
+        const G = Math.round(255 - t * (255 - 60));
+        const B = Math.round(255 - t * (255 - 160));
+        ctx.fillStyle = `rgb(${R},${G},${B})`;
+        ctx.fillRect(x, y, cell, cell);
+        ctx.strokeStyle = '#d8d8e0';
+        ctx.strokeRect(x, y, cell, cell);
+        // weight text
+        ctx.fillStyle = t > 0.5 ? '#fff' : '#444';
+        ctx.font = (cell > 46 ? '12px' : '10px') + ' monospace';
+        ctx.fillText(Math.round(w * 100) + '%', x + cell / 2, y + cell / 2);
+        cells.push({ x, y, w: cell, h: cell, row: r, col: c, weight: w });
+      }
+    }
+  }
+
+  canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+    for (const cl of cells) {
+      if (mx >= cl.x && mx <= cl.x + cl.w && my >= cl.y && my <= cl.y + cl.h) {
+        const w = layout.word;
+        out.textContent =
+          `Position ${cl.row} ('${w[cl.row]}') is paying ` +
+          `${(cl.weight * 100).toFixed(1)}% of its attention to ` +
+          `position ${cl.col} ('${w[cl.col]}').`;
+        return;
+      }
+    }
+    out.textContent = 'That cell is masked (a position cannot attend to its future). Click a colored cell.';
+  });
+
+  document.getElementById('heatGo').addEventListener('click', draw);
+  wordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') draw(); });
+  draw();
+})();
+</script>
+</body>
+</html>

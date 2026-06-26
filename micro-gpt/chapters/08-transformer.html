@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Transformer Block — MicroGPT Course</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  /* Local styles just for the block diagram on this page */
+  .tblock { max-width: 460px; margin: 24px auto; }
+  .tblock .stage {
+    background: #fff; border: 2px solid var(--accent);
+    border-radius: var(--radius); padding: 10px 14px; text-align: center;
+    font-weight: 600; color: var(--accent2); box-shadow: var(--shadow);
+  }
+  .tblock .stage.norm { border-color: var(--purple); color: var(--purple); }
+  .tblock .stage.add  { border-color: var(--green); color: #1e7e44; background: #f3fdf6; }
+  .tblock .stage.io   { border-color: #888; color: #444; background: #f6f6f8; }
+  .tblock .pipe { width: 2px; height: 18px; background: #bbb; margin: 0 auto; }
+  .tblock .resid-note { font-size: .78em; color: var(--green); text-align: center; margin: 2px 0; font-style: italic; }
+  .flow-stage { transition: background .25s, color .25s; }
+</style>
+</head>
+<body>
+<button id="hamburger">&#9776;</button>
+<nav id="sidebar"></nav>
+<div class="progress-bar"><div class="fill"></div></div>
+<main id="content">
+
+<h1>The Transformer Block</h1>
+<p class="subtitle">
+  <span class="difficulty advanced">Advanced</span>
+  &nbsp; How attention, the MLP, and residual connections snap together into one repeatable unit.
+</p>
+
+<div class="box info">
+  <strong>Where we are.</strong>
+  Chapter 6 explained the MLP and the normalization/activation layers. Chapter 7 explained attention.
+  This chapter assembles those pieces into the <strong>transformer block</strong> — the single unit that
+  GPT stacks over and over. Then we follow one character all the way from input to a predicted next
+  character.
+</div>
+
+<h2>1. The block diagram</h2>
+
+<p>
+  A transformer block takes a 16-number vector in and produces a 16-number vector out. In between, it
+  runs attention and an MLP, each wrapped with a normalization step and a <strong>residual connection</strong>
+  (the "save it and add it back" arrows). Here's the whole shape:
+</p>
+
+<div class="tblock">
+  <div class="stage io">Input — 16-dim vector</div>
+  <div class="pipe"></div>
+  <div class="resid-note">↘ save a copy as residual #1</div>
+  <div class="pipe"></div>
+  <div class="stage norm">RMSNorm</div>
+  <div class="pipe"></div>
+  <div class="stage">Multi-Head Attention &nbsp;←&nbsp; keys, values from all past positions</div>
+  <div class="pipe"></div>
+  <div class="stage add">+ add residual #1 back</div>
+  <div class="pipe"></div>
+  <div class="resid-note">↘ save a copy as residual #2</div>
+  <div class="pipe"></div>
+  <div class="stage norm">RMSNorm</div>
+  <div class="pipe"></div>
+  <div class="stage">MLP: Linear → ReLU → Linear &nbsp;(16 → 64 → 16)</div>
+  <div class="pipe"></div>
+  <div class="stage add">+ add residual #2 back</div>
+  <div class="pipe"></div>
+  <div class="stage io">Output — 16-dim vector</div>
+</div>
+
+<p>Two halves, each built the same way:</p>
+
+<div class="columns">
+  <div class="col">
+    <h4>Attention half</h4>
+    <p>save input → RMSNorm → attention → add the saved input back. The model asks "what in my past is relevant?" and folds the answer into the stream.</p>
+  </div>
+  <div class="col">
+    <h4>MLP half</h4>
+    <p>save again → RMSNorm → MLP → add the saved value back. The model does per-position "thinking" on the result, again folding it in.</p>
+  </div>
+</div>
+
+<div class="box tip">
+  <strong>The pattern to memorize:</strong> <code>x = x + sublayer(norm(x))</code>.
+  Normalize a copy, run a sublayer on it, add the result back onto the original. Attention and the MLP
+  are both wrapped in exactly this. Everything else is detail.
+</div>
+
+<div class="box info">
+  <strong>But why normalize <em>before</em> attention and the MLP, and not after?</strong>
+  This is called "pre-norm" (the original 2017 Transformer used "post-norm," normalizing <em>after</em> each
+  sublayer). Pre-norm is far more stable to train: every sublayer receives an input at a consistent scale, and
+  the residual stream stays clean because the norm only touches the <em>copy</em> that goes into the sublayer.
+  Post-norm tends to blow up or vanish in deep stacks. That's why GPT-2 and essentially every modern model use
+  pre-norm — exactly the <code>x = x + sublayer(norm(x))</code> shape above.
+</div>
+
+<div class="box info">
+  <strong>But why this exact order: norm → attention → add → norm → MLP → add?</strong>
+  The two sublayers do complementary jobs. <strong>Attention</strong> lets positions communicate — it mixes
+  information <em>across</em> the sequence ("what earlier characters are relevant to me?"). The
+  <strong>MLP</strong> does the opposite — it processes each position <em>on its own</em>, transforming what
+  that position just gathered. Alternating them gives the model a "look around, then think" rhythm. The norms
+  keep the scale sane and the residual adds keep the gradient flowing, so the two can be stacked indefinitely.
+</div>
+
+<div class="box tip">
+  <strong>Real-life analogy</strong>
+  A transformer block is one cycle of a classroom discussion. <strong>Step 1 (Attention):</strong>
+  "Look around — what have the other students said?" <strong>Step 2 (Residual):</strong> "Combine
+  what I just heard with what I already knew." <strong>Step 3 (MLP):</strong> "Now think privately
+  about what I learned." <strong>Step 4 (Residual):</strong> "Combine that fresh thinking with my
+  previous understanding." Stacking layers just repeats the cycle, each round deepening everyone's grasp.
+</div>
+
+<h2>2. Walking through the <code>gpt()</code> function</h2>
+
+<p>
+  Here is the forward pass from the Java code. It glues together the embedding lookup, the transformer
+  block, and the final projection to logits. Markers below.
+</p>
+
+<pre><code class="language-java">Value[] gpt(int tokenId, int posId, List&lt;Value[]&gt;[] keys, List&lt;Value[]&gt;[] values) {
+    // (1) token embedding + position embedding
+    Value[] x = new Value[nEmbd];
+    for (int i = 0; i &lt; nEmbd; i++)
+        x[i] = sd.get("wte")[tokenId][i].add(sd.get("wpe")[posId][i]);
+
+    // (2) initial RMSNorm (no gain parameters — just rescale)
+    x = rmsnorm(x);
+
+    for (int li = 0; li &lt; nLayer; li++) {     // nLayer = 1 here
+        // (3) save x, norm, then attention block  (see Chapter 7)
+        Value[] xr = x;
+        x = rmsnorm(x);
+        // ... Q, K, V projections, multi-head attention ...
+        // attention output projected through attn_wo
+
+        // (4) first residual: add attention output back onto saved x
+        for (int i = 0; i &lt; nEmbd; i++) x[i] = x[i].add(xr[i]);
+
+        // (5) save x, norm, then MLP: Linear -> ReLU -> Linear
+        xr = x;
+        x = rmsnorm(x);
+        x = linear(x, sd.get("layer" + li + ".mlp_fc1"));
+        for (int i = 0; i &lt; x.length; i++) x[i] = x[i].relu();
+        x = linear(x, sd.get("layer" + li + ".mlp_fc2"));
+
+        // (6) second residual: add MLP output back onto saved x
+        for (int i = 0; i &lt; nEmbd; i++) x[i] = x[i].add(xr[i]);
+    }
+
+    // (7) project to logits: 16-dim vector -> 27 scores (no final norm)
+    return linear(x, sd.get("lm_head"));
+}</code></pre>
+
+<div class="annotation-text"><span class="annotation">1</span> <strong>Embed and place.</strong> Look up the character's meaning vector and add a "where am I in the sequence" vector. (Detailed below.)</div>
+<div class="annotation-text"><span class="annotation">2</span> <strong>Initial RMSNorm.</strong> Rescale the vector so the numbers are a sane size. Note: <code>rmsnorm()</code> in this code has <em>no</em> learnable gain parameter — it just normalizes by root-mean-square.</div>
+<div class="annotation-text"><span class="annotation">3</span> <strong>Save + norm + attention.</strong> Save <code>x</code> for the residual, normalize a fresh copy, then run the Chapter 7 attention mechanism.</div>
+<div class="annotation-text"><span class="annotation">4</span> <strong>Residual #1.</strong> Add attention's output back onto the saved input. The block <em>adjusts</em> the stream rather than replacing it.</div>
+<div class="annotation-text"><span class="annotation">5</span> <strong>Save + norm + MLP.</strong> Same pattern: save, normalize, then run the two-layer MLP with a ReLU in the middle (16 → 64 → 16).</div>
+<div class="annotation-text"><span class="annotation">6</span> <strong>Residual #2.</strong> Add the MLP's output back. Same additive idea.</div>
+<div class="annotation-text"><span class="annotation">7</span> <strong>Project to logits.</strong> A linear layer turns the 16 numbers into 27 scores — one per possible next character. Unlike standard GPT-2, there is no final normalization here.</div>
+
+<h2>3. The full forward pass — following the letter 'c'</h2>
+
+<p>
+  Let's trace one real prediction. We feed the letter <code>c</code> at position 0 and watch what
+  happens, step by step.
+</p>
+
+<table>
+  <tr><th>#</th><th>Step</th><th>What the data looks like</th></tr>
+  <tr><td>1</td><td>Look up token embedding for <code>c</code></td><td>a vector of 16 numbers (its learned "meaning")</td></tr>
+  <tr><td>2</td><td>Look up position embedding for position 0</td><td>another 16 numbers ("I'm at the start")</td></tr>
+  <tr><td>3</td><td>Add them together</td><td>16 numbers — meaning + place, combined</td></tr>
+  <tr><td>4</td><td>RMSNorm → Attention → add residual</td><td>16 numbers, now informed by the (empty so far) past</td></tr>
+  <tr><td>5</td><td>RMSNorm → MLP → add residual</td><td>16 numbers, refined by per-position "thinking"</td></tr>
+  <tr><td>6</td><td>Final RMSNorm + linear projection</td><td>27 numbers (logits) — one score per vocab character</td></tr>
+  <tr><td>7</td><td>Softmax over the 27 logits</td><td>27 probabilities that sum to 1</td></tr>
+  <tr><td>8</td><td>Pick the highest (or sample)</td><td>one character — the model's guess for what follows <code>c</code></td></tr>
+</table>
+
+<div class="box info">
+  <strong>Why 27?</strong>
+  The model is trained on lowercase names: 26 letters plus one special "end of name" marker = 27
+  possible characters. So the vocabulary size is 27, and the final layer always outputs exactly 27
+  scores. After softmax, the largest probability tells you the most likely next character.
+</div>
+
+<div class="box info">
+  <strong>But why does the final projection (<code>lm_head</code>) go from 16 to 27?</strong>
+  Inside the block, the model thinks in a 16-dimensional vector — a compact "thinking space" with no direct
+  meaning per slot. But to actually answer, it must pick among 27 possible next characters. <code>lm_head</code>
+  is the bridge: a linear layer that converts the 16-number thinking vector into one score per option (27 of
+  them, the "decision space"). Softmax then turns those 27 scores into probabilities. The 16 is internal
+  capacity; the 27 is fixed by the vocabulary.
+</div>
+
+<div class="box warn">
+  <strong>At position 0 there's nothing to attend to but itself.</strong>
+  When <code>c</code> is the very first character, the attention step has only one position in its
+  key/value lists — position 0. So attention can only "blend" <code>c</code> with itself. Its real power
+  shows up later in the sequence, once there's a past to look back on. That's exactly the causal growth
+  from Chapter 7.
+</div>
+
+<div class="box tip">
+  <strong>Concrete example</strong>
+  <p>
+    Let's push one real letter through the whole block. We're at the letter <code>o</code> in
+    <strong>john</strong> (sequence so far: <code>BOS</code>, <code>j</code>, <code>o</code>), so the token is
+    <code>o</code> (id&nbsp;14) at position&nbsp;2. Watch the <em>shape</em> of the data at every stage:
+  </p>
+  <p>
+    <strong>Input:</strong> token id <code>14</code>, position <code>2</code>.
+  </p>
+  <ol style="margin:8px 0 0 18px">
+    <li><strong>Embedding:</strong> <code>wte[14] + wpe[2]</code> &rarr; 16 numbers (meaning + place).</li>
+    <li><strong>RMSNorm:</strong> rescale &rarr; 16 numbers at a sane magnitude.</li>
+    <li><strong>Attention:</strong> project to Q, K, V; 4 heads each output 4 numbers; concatenate &rarr; 16; output projection &rarr; 16.</li>
+    <li><strong>Residual #1:</strong> add the attention output back onto the pre-attention vector &rarr; 16.</li>
+    <li><strong>RMSNorm again</strong> &rarr; 16.</li>
+    <li><strong>MLP:</strong> 16 &rarr; 64 (expand) &rarr; ReLU &rarr; 64 &rarr; 16 (compress) &rarr; 16.</li>
+    <li><strong>Residual #2:</strong> add the MLP output back &rarr; 16.</li>
+    <li><strong>lm_head:</strong> 16 &rarr; 27 (one score per possible next character).</li>
+  </ol>
+  <p>
+    <strong>Output:</strong> the 27 logits, then softmax. Illustrative numbers for the two that matter here:<br>
+    <code>logits = [&hellip;, 'h':3.2, &hellip;, 'n':2.1, &hellip;]</code>
+    &rarr; softmax &rarr;
+    <code>[&hellip;, 'h':0.35, &hellip;, 'n':0.12, &hellip;]</code>
+  </p>
+  <p>
+    The model puts the most probability on <code>h</code> — which is correct, since
+    <strong>john</strong> continues <code>o &rarr; h</code>. Every number from step 1 to step 7 was a
+    16-vector; only the final <code>lm_head</code> widens it to 27, the size of the vocabulary.
+  </p>
+</div>
+
+<h2>4. Why "layers"?</h2>
+
+<p>
+  Our <code>gpt()</code> loop runs <code>nLayer = 1</code> — a single transformer block. That's why the
+  whole model is so small. The only thing GPT-4 changes here is the count:
+</p>
+
+<div class="columns">
+  <div class="col">
+    <h4>microGPT</h4>
+    <ul>
+      <li><code>nLayer = 1</code></li>
+      <li>one block, run once</li>
+      <li>learns spelling-ish patterns for names</li>
+    </ul>
+  </div>
+  <div class="col">
+    <h4>GPT-4 (roughly)</h4>
+    <ul>
+      <li>~120 layers</li>
+      <li>the same block, stacked 120 times</li>
+      <li>early layers learn spelling, middle layers grammar, later layers meaning</li>
+    </ul>
+  </div>
+</div>
+
+<p>
+  Stacking just means making the loop run more times: the output of block 1 becomes the input of block 2,
+  and so on. Each block has its own learned weights, so each can specialize. More layers = more chances
+  to transform the vector into something richer before it becomes a prediction.
+</p>
+
+<div class="box info">
+  <strong>But why only 1 layer in <em>our</em> model?</strong>
+  Because the task is genuinely simple: character-level name generation over a 27-character vocabulary. One
+  block is enough to learn patterns like "after <code>sh</code>, an <code>a</code> is common" or "names rarely
+  end in <code>q</code>." Real language needs depth: early layers learn spelling and grammar, middle layers
+  learn meaning, late layers learn task-specific behavior — and you can only build that hierarchy by stacking
+  many blocks. GPT-4 uses ~120. We use 1 because one is all the problem demands.
+</div>
+
+<div class="box tip">
+  <strong>Same block, more reps.</strong>
+  There is no architectural difference between microGPT and GPT-4's blocks — only how many are chained,
+  how wide the vectors are, and how much data they trained on. You're looking at the real recipe.
+</div>
+
+<h2>5. The "residual stream" view</h2>
+
+<p>
+  Here's the mental model that makes transformers click. Picture the 16-number vector as a
+  <strong>stream</strong> of information flowing straight down the page from input to output. Each
+  sublayer (attention, then MLP) doesn't replace the stream — it <em>reads</em> from it and
+  <em>writes a small correction</em> back onto it.
+</p>
+
+<div class="math-block">
+  x &nbsp;=&nbsp; x &nbsp;+&nbsp; attention(norm(x))<br>
+  x &nbsp;=&nbsp; x &nbsp;+&nbsp; mlp(norm(x))
+</div>
+
+<p>
+  Because the update is always an <strong>addition</strong> (the <code>+ x</code>), information never gets
+  destroyed — it can only be nudged. Attention contributes "here's relevant context from the past." The
+  MLP contributes "here's some processing of that." Both get added into the same running stream.
+</p>
+
+<div class="box tip">
+  <strong>Real-life analogy</strong>
+  Residual connections are like taking notes during a lecture. You listen to the lecture
+  (attention + MLP) and jot down new understanding — but you also keep your original notes
+  from before. The residual connection <em>adds</em> the new understanding to the old, so
+  even if the lecture was confusing and the block learned nothing useful, you haven't lost
+  what you already knew.
+</div>
+
+<div class="box info">
+  <strong>Why additive updates help.</strong>
+  Two reasons. First, training: gradients (Chapter 9) flow cleanly backward through a plain addition, so
+  even a deep 120-block stack can learn without the signal fading away. Second, behavior: each block can
+  make a tiny, targeted edit to the stream instead of having to reconstruct everything from scratch.
+  Small additive corrections, stacked many times, add up to sophisticated behavior.
+</div>
+
+<h2>6. Interactive demo: forward-pass visualizer</h2>
+
+<p>
+  Step through the block one stage at a time. We use the tiny sequence <strong>"ab"</strong> and show the
+  vector as just <strong>4 numbers</strong> (instead of 16) so it fits on screen. Watch how each stage
+  reshapes the bars — and notice that the residual <em>add</em> steps bring back the saved copy rather
+  than overwriting.
+</p>
+
+<div class="demo">
+  <h4>One transformer block, stage by stage</h4>
+  <canvas id="flowCanvas" width="560" height="300"></canvas>
+  <div class="controls">
+    <button id="flowStep">Step ▶</button>
+    <button id="flowReset">Reset</button>
+    <label>Token:
+      <select id="flowTok">
+        <option value="0">a (pos 0)</option>
+        <option value="1">b (pos 1)</option>
+      </select>
+    </label>
+  </div>
+  <div class="output" id="flowOut">Press “Step” to send the vector through the first stage.</div>
+</div>
+
+<div class="box tip">
+  <strong>That's the whole architecture.</strong>
+  Embedding → (RMSNorm → Attention → add) → (RMSNorm → MLP → add) → project to logits → softmax. Repeat
+  the middle part for each layer. Next, Chapter 9 explains how all those weight matrices actually get
+  <em>learned</em> in the first place.
+</div>
+
+<div class="page-nav"></div>
+</main>
+
+<script src="../js/nav.js"></script>
+<script src="../js/highlight.js"></script>
+<script>
+// ── Forward-pass visualizer ─────────────────────────────────────────────
+(function () {
+  const canvas = document.getElementById('flowCanvas');
+  const ctx = canvas.getContext('2d');
+  const out = document.getElementById('flowOut');
+  const tokSel = document.getElementById('flowTok');
+
+  // Simplified 4-dim vectors per token, so the math is followable.
+  const TOKENS = {
+    0: { name: 'a (pos 0)', tok: [0.8, -0.4, 0.2, 0.6], pos: [0.1, 0.1, 0.0, -0.2] },
+    1: { name: 'b (pos 1)', tok: [-0.3, 0.7, 0.5, -0.1], pos: [0.2, -0.1, 0.3, 0.1] },
+  };
+
+  // Each stage takes the current vector and returns the next one + a label + color.
+  function buildStages(t) {
+    const sum = (a, b) => a.map((v, i) => v + b[i]);
+    const norm = (a) => {
+      const ms = Math.sqrt(a.reduce((s, v) => s + v * v, 0) / a.length) + 1e-5;
+      return a.map(v => v / ms * 0.9);
+    };
+    const relu = (a) => a.map(v => Math.max(0, v));
+    // pretend "attention" and "mlp" sublayers as small fixed transforms
+    const attn = (a) => relu(a.map((v, i) => v * 0.6 + (a[(i + 1) % 4]) * 0.3));
+    const mlp  = (a) => a.map((v, i) => v * 0.5 + (i % 2 ? 0.15 : -0.1));
+
+    const stages = [];
+    let x = sum(t.tok, t.pos);
+    stages.push({ label: '1. Embedding (token + position added)', vec: x.slice(), color: '#4361ee' });
+
+    let resid1 = x.slice();
+    let n1 = norm(x);
+    stages.push({ label: '2. RMSNorm (copy normalized; original saved as residual #1)', vec: n1.slice(), color: '#9b59b6' });
+
+    let a = attn(n1);
+    stages.push({ label: '3. Multi-Head Attention (blends in relevant past)', vec: a.slice(), color: '#4361ee' });
+
+    x = sum(resid1, a);
+    stages.push({ label: '4. + Residual #1 (add the saved input back)', vec: x.slice(), color: '#2ecc71' });
+
+    let resid2 = x.slice();
+    let n2 = norm(x);
+    stages.push({ label: '5. RMSNorm again (residual #2 saved)', vec: n2.slice(), color: '#9b59b6' });
+
+    let m = mlp(relu(n2));
+    stages.push({ label: '6. MLP: Linear → ReLU → Linear (per-position thinking)', vec: m.slice(), color: '#4361ee' });
+
+    x = sum(resid2, m);
+    stages.push({ label: '7. + Residual #2 (add saved value back) → block output', vec: x.slice(), color: '#2ecc71' });
+
+    return stages;
+  }
+
+  let stages = buildStages(TOKENS[0]);
+  let step = 0;
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const st = stages[step];
+    const vec = st.vec;
+
+    // bars
+    const baseY = 200, maxH = 120, n = vec.length;
+    const slot = 90, x0 = 70;
+    ctx.textAlign = 'center';
+    ctx.font = '13px monospace';
+
+    for (let i = 0; i < n; i++) {
+      const cx = x0 + i * slot;
+      const h = Math.max(2, Math.min(maxH, Math.abs(vec[i]) * maxH));
+      const up = vec[i] >= 0;
+      ctx.fillStyle = st.color;
+      ctx.globalAlpha = 0.85;
+      if (up) ctx.fillRect(cx - 26, baseY - h, 52, h);
+      else    ctx.fillRect(cx - 26, baseY, 52, h);
+      ctx.globalAlpha = 1;
+      // value
+      ctx.fillStyle = '#333';
+      ctx.fillText(vec[i].toFixed(2), cx, up ? baseY - h - 8 : baseY + h + 16);
+      // dim label
+      ctx.fillStyle = '#999';
+      ctx.fillText('d' + i, cx, baseY + (up ? 22 : 40));
+    }
+
+    // baseline
+    ctx.strokeStyle = '#ccc';
+    ctx.beginPath();
+    ctx.moveTo(40, baseY); ctx.lineTo(canvas.width - 20, baseY); ctx.stroke();
+
+    // stage title
+    ctx.fillStyle = st.color;
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(st.label, 24, 32);
+
+    // progress dots
+    for (let i = 0; i < stages.length; i++) {
+      ctx.beginPath();
+      ctx.fillStyle = i <= step ? '#4361ee' : '#dcdce4';
+      ctx.arc(40 + i * 22, 60, 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    out.textContent =
+      `Stage ${step + 1} of ${stages.length}: ${st.label}\n` +
+      `vector = [${vec.map(v => v.toFixed(2)).join(', ')}]`;
+  }
+
+  document.getElementById('flowStep').addEventListener('click', () => {
+    if (step < stages.length - 1) step++;
+    draw();
+  });
+  document.getElementById('flowReset').addEventListener('click', () => {
+    step = 0; draw();
+  });
+  tokSel.addEventListener('change', () => {
+    stages = buildStages(TOKENS[tokSel.value]); step = 0; draw();
+  });
+
+  draw();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MicroGPT — Java Course</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<button id="hamburger">&#9776;</button>
+<nav id="sidebar"></nav>
+<div class="progress-bar"><div class="fill"></div></div>
+
+<main id="content">
+  <h1>Understanding GPT from Scratch</h1>
+  <p class="subtitle">A complete walkthrough of a working GPT in Java — from zero math background to full understanding.</p>
+
+  <div class="box info">
+    <strong>What is this?</strong>
+    In February 2026, Andrej Karpathy released <a href="https://gist.github.com/karpathy/8627fe009c40f57531cb18360106ce95">microGPT</a> — a complete GPT (the same architecture behind ChatGPT) in just 200 lines of Python, with zero dependencies. A developer named <a href="https://github.com/dev4any1/microgpt">dev4any1</a> ported it to Java in ~300 lines. This course takes that Java code and explains <strong>every single line</strong> — even if you've never heard of a vector, a gradient, or a probability distribution.
+  </div>
+
+  <h2>Who is this for?</h2>
+  <p>You are a <strong>developer</strong> (you know Java, loops, classes, arrays), but you don't know:</p>
+  <ul>
+    <li>What a <strong>vector</strong> is (beyond "an array of numbers")</li>
+    <li>What an <strong>embedding</strong> means</li>
+    <li>What <strong>probabilities, Gaussian distributions, softmax</strong> do</li>
+    <li>What a <strong>gradient</strong> or <strong>derivative</strong> is</li>
+    <li>How a <strong>neural network</strong> learns</li>
+    <li>What <strong>attention</strong> means in "Attention Is All You Need"</li>
+  </ul>
+  <p>By the end, you will understand every concept and every line of the 300-line Java GPT.</p>
+
+  <h2>How to use this course</h2>
+  <div class="box tip">
+    <strong>100% Offline</strong>
+    This entire site works without internet. Open <code>index.html</code> in your browser — on a plane, in a train, wherever. All JavaScript, charts, and interactive demos are self-contained.
+  </div>
+  <p>Read the chapters in order. Each one builds on the previous. Interactive demos let you experiment with the concepts — drag vectors, adjust parameters, see how things change in real time.</p>
+
+  <h2>Course Map</h2>
+
+  <h3 style="margin-top:24px; color: #888; font-size:.9em; text-transform:uppercase; letter-spacing:1px;">Foundations</h3>
+  <table>
+    <tr>
+      <th style="width:60px">Ch.</th>
+      <th>Topic</th>
+      <th style="width:120px">Level</th>
+    </tr>
+    <tr>
+      <td><strong>01</strong></td>
+      <td><a href="chapters/01-what-is-gpt.html">What is a GPT?</a> — The big picture before any math</td>
+      <td><span class="difficulty beginner">Beginner</span></td>
+    </tr>
+    <tr>
+      <td><strong>02</strong></td>
+      <td><a href="chapters/02-vectors.html">Vectors & Linear Algebra</a> — 1D, 2D, 3D, 5D + dimensionality reduction</td>
+      <td><span class="difficulty beginner">Beginner</span></td>
+    </tr>
+    <tr>
+      <td><strong>03</strong></td>
+      <td><a href="chapters/03-embeddings.html">Embeddings</a> — How a computer turns words into vectors</td>
+      <td><span class="difficulty beginner">Beginner</span></td>
+    </tr>
+    <tr>
+      <td><strong>04</strong></td>
+      <td><a href="chapters/04-math-basics.html">Probabilities & Softmax</a> — Gaussian, probability, turning numbers into choices</td>
+      <td><span class="difficulty intermediate">Intermediate</span></td>
+    </tr>
+  </table>
+
+  <h3 style="margin-top:24px; color: #888; font-size:.9em; text-transform:uppercase; letter-spacing:1px;">Building Blocks</h3>
+  <table>
+    <tr>
+      <th style="width:60px">Ch.</th>
+      <th>Topic</th>
+      <th style="width:120px">Level</th>
+    </tr>
+    <tr>
+      <td><strong>05</strong></td>
+      <td><a href="chapters/05-autograd.html">Automatic Differentiation</a> — How the <code>Value</code> class tracks gradients</td>
+      <td><span class="difficulty intermediate">Intermediate</span></td>
+    </tr>
+    <tr>
+      <td><strong>06</strong></td>
+      <td><a href="chapters/06-neural-networks.html">Neural Network Layers</a> — Linear, RMSNorm, ReLU — what each layer does</td>
+      <td><span class="difficulty intermediate">Intermediate</span></td>
+    </tr>
+    <tr>
+      <td><strong>07</strong></td>
+      <td><a href="chapters/07-attention.html">The Attention Mechanism</a> — Query, Key, Value — the core idea of transformers</td>
+      <td><span class="difficulty advanced">Advanced</span></td>
+    </tr>
+  </table>
+
+  <h3 style="margin-top:24px; color: #888; font-size:.9em; text-transform:uppercase; letter-spacing:1px;">Putting It Together</h3>
+  <table>
+    <tr>
+      <th style="width:60px">Ch.</th>
+      <th>Topic</th>
+      <th style="width:120px">Level</th>
+    </tr>
+    <tr>
+      <td><strong>08</strong></td>
+      <td><a href="chapters/08-transformer.html">The Transformer</a> — How attention + MLP + residuals form a transformer block</td>
+      <td><span class="difficulty advanced">Advanced</span></td>
+    </tr>
+    <tr>
+      <td><strong>09</strong></td>
+      <td><a href="chapters/09-training.html">Training & Optimization</a> — Loss, backprop, Adam optimizer — how the model learns</td>
+      <td><span class="difficulty advanced">Advanced</span></td>
+    </tr>
+    <tr>
+      <td><strong>10</strong></td>
+      <td><a href="chapters/10-full-code.html">Full Java Code Walkthrough</a> — The complete 300-line Java GPT, annotated line by line</td>
+      <td><span class="difficulty advanced">Advanced</span></td>
+    </tr>
+  </table>
+
+  <h3 style="margin-top:24px; color: #888; font-size:.9em; text-transform:uppercase; letter-spacing:1px;">Hands-On</h3>
+  <table>
+    <tr>
+      <th style="width:60px"></th>
+      <th>Topic</th>
+      <th style="width:120px">Level</th>
+    </tr>
+    <tr>
+      <td>&#9654;</td>
+      <td><a href="chapters/walkthrough.html">Interactive Walkthrough</a> — Step through a GPT forward pass with real numbers flowing through the code</td>
+      <td><span class="difficulty intermediate">Intermediate</span></td>
+    </tr>
+  </table>
+
+  <h3 style="margin-top:24px; color: #888; font-size:.9em; text-transform:uppercase; letter-spacing:1px;">Reference</h3>
+  <table>
+    <tr>
+      <th style="width:60px"></th>
+      <th>Topic</th>
+      <th style="width:120px">Level</th>
+    </tr>
+    <tr>
+      <td></td>
+      <td><a href="glossary.html">Glossary</a> — Every term explained in plain language</td>
+      <td><span class="difficulty beginner">All levels</span></td>
+    </tr>
+  </table>
+
+  <h2>The Code</h2>
+  <p>This is the <strong>entire</strong> program we're going to understand — a working GPT in ~300 lines of Java. It trains on a dataset of 32,000 human names and learns to invent new ones. The same architecture powers ChatGPT, just scaled up by a factor of 1,000,000x.</p>
+
+  <div class="columns">
+    <div class="col">
+      <h4>This micro GPT</h4>
+      <ul>
+        <li>1 transformer layer</li>
+        <li>4 attention heads</li>
+        <li>16-dimensional embeddings</li>
+        <li>4,192 parameters</li>
+        <li>Trains in minutes on CPU</li>
+        <li>Learns to generate names</li>
+      </ul>
+    </div>
+    <div class="col">
+      <h4>ChatGPT (GPT-4) <span style="font-weight:normal;font-size:.75em;color:#888;">(estimated*)</span></h4>
+      <ul>
+        <li>~120 transformer layers</li>
+        <li>~96 attention heads</li>
+        <li>~12,000-dimensional embeddings</li>
+        <li>~1.8 trillion parameters</li>
+        <li>Trains for months on thousands of GPUs</li>
+        <li>Learns human language</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="box tip">
+    <strong>Same recipe, different scale</strong> <span style="font-size:.85em;color:#888;">(*GPT-4's exact architecture has not been published by OpenAI; figures above are widely cited estimates.)</span>
+    Every concept in the micro version (embeddings, attention, softmax, backpropagation, Adam) is <em>exactly</em> the same in the full version. The difference is only the numbers — more layers, more heads, more dimensions, more data, more compute. Understanding the micro version gives you the complete picture.
+  </div>
+
+  <div class="page-nav"></div>
+</main>
+
+<script src="js/nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Automatic Differentiation — MicroGPT Course</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<button id="hamburger">&#9776;</button>
+<nav id="sidebar"></nav>
+<div class="progress-bar"><div class="fill"></div></div>
+<main id="content">
+
+<h1>Automatic Differentiation</h1>
+<p class="subtitle">The <code>Value</code> class is the engine of learning. It is a "smart number" that remembers how it was built — so the computer can figure out, on its own, how to make the model better.</p>
+
+<div class="box info">
+<strong>Where we are</strong>
+We have numbers (vectors), and we know how to turn scores into probabilities (softmax). But how does the model <em>learn</em>? Learning means nudging thousands of numbers in the right direction. To know which direction is "right", we need <strong>derivatives</strong>. This chapter is the most important one in the whole course — take your time.
+</div>
+
+<h2>1. What is a derivative?</h2>
+
+<p>Forget every calculus class you may have slept through. A derivative answers one plain question:</p>
+
+<div class="box tip">
+<strong>The only definition you need</strong>
+A derivative is a <em>rate of change</em>: <strong>"If I nudge the input by a tiny bit, how much does the output change, and in which direction?"</strong>
+</div>
+
+<p>That's it. A derivative is a number. A <em>big</em> derivative means the output is very sensitive — a small push on the input causes a big change in the output. A <em>small</em> derivative means the output barely reacts. A <em>negative</em> derivative means pushing the input <em>up</em> makes the output go <em>down</em>.</p>
+
+<div class="box info">
+<strong>But why do we need derivatives at all?</strong>
+Because training means adjusting thousands of numbers, and for each one we have to know <em>which way to push it</em> — up or down — to make the model less wrong. Without derivatives we'd be blind: our only option would be to try a random nudge, re-run the entire model, and check whether the loss dropped. With 4,192 parameters that's thousands of blind guesses <em>per training step</em>. A derivative hands us the exact direction directly — and, as we'll see, one backward pass computes all 4,192 of them at once.
+</div>
+
+<h3>The speed analogy</h3>
+
+<p>Speed is the most familiar derivative in the world. Suppose you drive and after 2 hours you have covered 100&nbsp;km. Your average speed is:</p>
+
+<div class="math-block">
+speed = change in position / change in time = 100&nbsp;km / 2&nbsp;h = 50&nbsp;km/h
+</div>
+
+<p>Speed is "the derivative of position with respect to time": if time moves forward a tiny bit, how much does your position change? 50&nbsp;km for every hour. <strong>Position is the output, time is the input, and speed is the rate of change between them.</strong> You have been computing derivatives your whole life without calling them that.</p>
+
+<h3>The tangent-line picture</h3>
+
+<p>Draw any curve. Pick a point on it. Now lay a straight ruler against the curve so it just kisses that one point — that line is the <strong>tangent</strong>. How steep the tangent is (its slope) <em>is</em> the derivative at that point.</p>
+
+<ul>
+<li>Curve going steeply <strong>up</strong> → large positive derivative.</li>
+<li>Curve going steeply <strong>down</strong> → large negative derivative.</li>
+<li>Curve momentarily <strong>flat</strong> (top of a hill, bottom of a valley) → derivative is zero.</li>
+</ul>
+
+<div class="demo">
+<h4>Demo: slope of the tangent = the derivative</h4>
+<canvas id="tangentCanvas" width="600" height="300"></canvas>
+<div class="controls">
+<label>Move the point: <input type="range" id="tangentX" min="-28" max="28" value="-14"></label>
+<span id="tangentOut" class="math"></span>
+</div>
+<p style="font-size:.85em;color:#666;margin:8px 0 0">The blue curve is a simple hill. The orange line is the tangent at the red point. Slide the point: where the hill rises, the slope (derivative) is positive; at the very top it is zero; on the way down it is negative.</p>
+</div>
+
+<div class="box warn">
+<strong>The good news</strong>
+We will <em>never</em> compute a derivative by hand. We do not need calculus formulas. The <code>Value</code> class computes every derivative for us, automatically. That is literally what "automatic differentiation" (autograd) means. Our only job is to understand <em>what</em> the number means, not how to derive it on paper.
+</div>
+
+<h2>2. The chain rule — the one idea that makes it work</h2>
+
+<p>There is exactly one calculus concept you must absorb, because the entire engine is built on it: the <strong>chain rule</strong>. It tells you how to find the rate of change through a <em>chain</em> of steps.</p>
+
+<h3>The salary analogy</h3>
+
+<p>Imagine a chain of three things that depend on each other:</p>
+
+<ul>
+<li>Doubling your <strong>study hours</strong> doubles your <strong>grade</strong>. (rate = ×2)</li>
+<li>Doubling your <strong>grade</strong> doubles your <strong>salary</strong>. (rate = ×2)</li>
+</ul>
+
+<p>So what happens to your salary if you double your study hours? You don't add the effects — you <strong>multiply</strong> them:</p>
+
+<div class="math-block">
+study&nbsp;→&nbsp;salary&nbsp; = &nbsp;(study&nbsp;→&nbsp;grade) × (grade&nbsp;→&nbsp;salary)&nbsp; = &nbsp;2 × 2 = 4×
+</div>
+
+<p>Double the study hours, quadruple the salary. The rates of change <em>multiply along the chain</em>. That is the chain rule, in plain words.</p>
+
+<h3>The formula (don't panic)</h3>
+
+<p>If some final value <span class="math">f</span> depends on <span class="math">h</span>, and <span class="math">h</span> depends on <span class="math">x</span>, then:</p>
+
+<div class="math-block">
+df/dx&nbsp; = &nbsp;df/dh &nbsp;×&nbsp; dh/dx
+</div>
+
+<p>Read <span class="math">df/dx</span> as "how much f changes when x changes". The formula says: to get the rate from <span class="math">x</span> all the way to <span class="math">f</span>, multiply the rate of each link in the chain. The "study → grade → salary" example <em>is</em> this formula with all rates equal to 2.</p>
+
+<div class="box info">
+<strong>Why this matters for a neural network</strong>
+A neural network is a giant chain of tiny operations: multiply, add, multiply, add... thousands of links. The final output is a single number called the <strong>loss</strong> (how wrong the model is). To improve, we need the rate of change of the loss with respect to <em>every</em> parameter. The chain rule lets us compute all of them by multiplying local rates backward through the chain. This backward sweep is called <strong>backpropagation</strong>.
+</div>
+
+<div class="box tip">
+<strong>Real-life analogy</strong>
+Backpropagation is tracing back a food chain. A restaurant dish tastes bad, so the
+chef traces backward: "Was it the sauce? &rarr; Was it the tomatoes in the sauce?
+&rarr; Was it the supplier of those tomatoes?" Each step asks "how much did <em>this</em>
+ingredient contribute to the bad taste?" Backpropagation does exactly that: it traces
+back through every computation to find how much each parameter contributed to the error.
+</div>
+
+<h2>3. The <code>Value</code> class — a Java autograd engine</h2>
+
+<p>Here is the heart of microGPT. Every number that flows through the model is not a plain <code>double</code> — it is a <code>Value</code>. A <code>Value</code> is a <strong>smart number that remembers how it was computed</strong>, so it can later trace the chain rule backward.</p>
+
+<pre><code class="language-java">// Autograd engine for recursive chain rule application
+// through a computation graph
+record Value(double[] data, double[] grad,
+             Value[] children, double[] localGrads) {
+
+    Value(double v) {
+        this(new double[]{v}, new double[]{0},
+             new Value[0], new double[0]);
+    }
+
+    static Value of(double v) { return new Value(v); }
+
+    double d() { return data[0]; }          // the actual number
+    double g() { return grad[0]; }          // the gradient
+    void addGrad(double v) { grad[0] += v; } // accumulate gradient
+}</code></pre>
+
+<p>Four fields, and each one has a clear job:</p>
+
+<table>
+<tr><th style="width:130px">Field</th><th>Plain-English meaning</th></tr>
+<tr><td><code>data</code></td><td>The actual number. If this Value holds 6.0, then <code>data[0]</code> is 6.0. (It's a 1-element array only so the value can be mutated in place — a Java trick, nothing deep.)</td></tr>
+<tr><td><code>grad</code></td><td>The <strong>gradient</strong>: how much the final loss changes if <em>this</em> number changes. Starts at 0. This is the derivative we care about. The whole point of the engine is to fill this in.</td></tr>
+<tr><td><code>children</code></td><td>Which Values were used to build this one. If <code>c = a + b</code>, then <code>c</code>'s children are <code>a</code> and <code>b</code>. This is the "memory" of how it was computed.</td></tr>
+<tr><td><code>localGrads</code></td><td>The local derivative of <em>this</em> operation with respect to each child — one link of the chain. For <code>c = a + b</code>, both local grads are 1.</td></tr>
+</table>
+
+<div class="box tip">
+<strong>data vs. grad — keep them separate in your head</strong>
+<code>data</code> = "what is the number?" (flows <strong>forward</strong>, left to right). <code>grad</code> = "how sensitive is the loss to this number?" (flows <strong>backward</strong>, right to left). Forward fills <code>data</code>; backward fills <code>grad</code>. Two passes, two fields.
+</div>
+
+<h2>4. Every operation, with real numbers</h2>
+
+<p>Each math operation is a method on <code>Value</code>. It does two things at once: computes the forward result (the new <code>data</code>) <em>and</em> records the local gradients (the chain-rule links). Let's walk every single one with concrete numbers, using <strong>a&nbsp;=&nbsp;3</strong> and <strong>b&nbsp;=&nbsp;2</strong>.</p>
+
+<h3><code>add</code> — addition</h3>
+
+<pre><code class="language-java">Value add(Value o) {
+    return op(d() + o.d(),
+              new Value[]{this, o},
+              new double[]{1, 1});   // dc/da = 1, dc/db = 1
+}</code></pre>
+
+<p>If <span class="math">c = a + b</span>, then nudging <span class="math">a</span> up by a tiny amount pushes <span class="math">c</span> up by exactly the same amount — so the rate is 1. Same for <span class="math">b</span>. Both contribute equally.</p>
+
+<div class="math-block">
+c = 3 + 2 = 5 &nbsp;&nbsp;|&nbsp;&nbsp; dc/da = 1, &nbsp; dc/db = 1
+</div>
+
+<h3><code>mul</code> — multiplication</h3>
+
+<pre><code class="language-java">Value mul(Value o) {
+    return op(d() * o.d(),
+              new Value[]{this, o},
+              new double[]{o.d(), d()});  // dc/da = b, dc/db = a
+}</code></pre>
+
+<p>This one is sneaky and beautiful. If <span class="math">c = a × b</span>, then the rate of change of <span class="math">c</span> with respect to <span class="math">a</span> is <span class="math">b</span> — because each extra unit of <span class="math">a</span> adds <span class="math">b</span> to the product. And the rate with respect to <span class="math">b</span> is <span class="math">a</span>. The derivatives are <em>crossed over</em>.</p>
+
+<div class="math-block">
+c = 3 × 2 = 6 &nbsp;&nbsp;|&nbsp;&nbsp; dc/da = b = 2, &nbsp; dc/db = a = 3
+</div>
+
+<h3><code>pow</code> — raising to a power</h3>
+
+<pre><code class="language-java">Value pow(double e) {
+    return op(Math.pow(d(), e),
+              new Value[]{this},
+              new double[]{e * Math.pow(d(), e - 1)});  // n·a^(n-1)
+}</code></pre>
+
+<p>The "power rule". If <span class="math">c = a<sup>n</sup></span>, the rate is <span class="math">n × a<sup>n-1</sup></span>. With <span class="math">a = 3, n = 2</span>:</p>
+
+<div class="math-block">
+c = 3² = 9 &nbsp;&nbsp;|&nbsp;&nbsp; dc/da = 2 × 3¹ = 6
+</div>
+
+<h3><code>exp</code> — the exponential</h3>
+
+<pre><code class="language-java">Value exp() {
+    double e = Math.exp(d());
+    return op(e, new Value[]{this}, new double[]{e});  // dc/da = e^a
+}</code></pre>
+
+<p>The exponential <span class="math">e<sup>a</sup></span> has a magical property: <strong>it is its own derivative</strong>. The rate of change equals the value itself. With <span class="math">a = 3</span>:</p>
+
+<div class="math-block">
+c = e³ ≈ 20.09 &nbsp;&nbsp;|&nbsp;&nbsp; dc/da = e³ ≈ 20.09
+</div>
+
+<h3><code>log</code> — the natural logarithm</h3>
+
+<pre><code class="language-java">Value log() {
+    return op(Math.log(d()),
+              new Value[]{this},
+              new double[]{1 / d()});   // dc/da = 1/a
+}</code></pre>
+
+<p>The derivative of <span class="math">log(a)</span> is simply <span class="math">1/a</span>. With <span class="math">a = 3</span>:</p>
+
+<div class="math-block">
+c = log(3) ≈ 1.099 &nbsp;&nbsp;|&nbsp;&nbsp; dc/da = 1/3 ≈ 0.333
+</div>
+
+<h3><code>relu</code> — the gate</h3>
+
+<pre><code class="language-java">Value relu() {
+    return op(Math.max(0, d()),
+              new Value[]{this},
+              new double[]{d() &gt; 0 ? 1 : 0});  // 1 if positive, else 0
+}</code></pre>
+
+<p>ReLU (we meet it properly in the next chapter) keeps positive numbers and zeroes out negatives. Its derivative is a switch: if the input was positive, the rate is 1 (it passed straight through); if it was negative, the rate is 0 (the gate was shut, so nudging the input changes nothing).</p>
+
+<div class="math-block">
+relu(3) = 3, dc/da = 1 &nbsp;&nbsp;|&nbsp;&nbsp; relu(−3) = 0, dc/da = 0
+</div>
+
+<div class="box info">
+<strong>Notice the pattern</strong>
+Every operation records <em>just its own local link</em> of the chain — never the whole chain. <code>mul</code> doesn't know or care what came before <code>a</code> and <code>b</code>. It only stores "my rate with respect to my immediate children". The chain rule will stitch all these local links together later, automatically. This locality is what makes autograd simple enough to fit in a few lines.
+</div>
+
+<div class="box tip">
+<strong>Concrete example</strong>
+<p><strong>Forward:</strong> let <code>a = 3</code>, <code>b = 2</code>, and
+<code>c = a.mul(b)</code>. Then <code>c.data = 6</code>, <code>c.children = [a, b]</code>,
+and <code>c.localGrads = [2, 3]</code> (that's <code>[b, a]</code>).</p>
+<p><strong>Backward from c:</strong> seed <code>c.grad = 1</code>, then push down:
+<code>a.grad += localGrad &times; c.grad = 2 &times; 1 = 2</code>, and
+<code>b.grad += 3 &times; 1 = 3</code>.</p>
+<p><strong>What <code>a.grad = 2</code> means:</strong> nudge <code>a</code> from 3 up to
+3.01, and the output <code>c</code> rises from 6 to 6.02 — a change of 0.02, i.e. 2&times;
+the nudge. The gradient is literally that multiplier, and it's what tells us how to
+adjust <code>a</code> to move the loss.</p>
+</div>
+
+<h2>5. <code>backward()</code> — flowing gradients through the graph</h2>
+
+<p>The forward pass built a <strong>computation graph</strong>: every <code>Value</code> points back to its children. Now we run the chain rule backward across that whole graph in one sweep. Here is the method:</p>
+
+<pre><code class="language-java">void backward() {
+    List&lt;Value&gt; topo = new ArrayList&lt;&gt;();
+    Set&lt;Value&gt; visited = new HashSet&lt;&gt;();
+    buildTopo(this, topo, visited);     // 1) order the nodes
+    grad[0] = 1;                        // 2) seed: d(loss)/d(loss) = 1
+    for (int i = topo.size() - 1; i &gt;= 0; i--) {  // 3) walk backward
+        Value v = topo.get(i);
+        for (int j = 0; j &lt; v.children.length; j++)
+            v.children[j].addGrad(
+                v.localGrads[j] * v.grad[0]);  // chain rule!
+    }
+}</code></pre>
+
+<div class="box info">
+<strong>But why a <code>backward()</code> sweep — why not just compute each gradient directly?</strong>
+You <em>could</em> measure each parameter's gradient by brute force: nudge it, re-run the whole forward pass, and see how the loss moved. But that's one full forward pass <em>per parameter</em> — 4,192 of them, every single step. Backpropagation computes <strong>every</strong> gradient in a single backward sweep that costs about the same as one forward pass. That trick — all gradients for the price of one — is the entire reason neural networks are trainable in practice.
+</div>
+
+<p>Three steps. Let's take them one at a time, then run a full example.</p>
+
+<h3>Step 1 — topological sort</h3>
+
+<p>Before we can propagate gradients backward, we need the nodes in a sensible order: <strong>every node must come after all the children it was built from</strong>. That ordering is a <em>topological sort</em>, built by <code>buildTopo</code> with a depth-first walk:</p>
+
+<pre><code class="language-java">static void buildTopo(Value v, List&lt;Value&gt; topo, Set&lt;Value&gt; visited) {
+    if (visited.add(v)) {              // skip if already seen
+        for (Value c : v.children)
+            buildTopo(c, topo, visited);  // children first
+        topo.add(v);                   // then me
+    }
+}</code></pre>
+
+<p>The <code>visited</code> set guarantees each node is processed once, even if it feeds into many places. After this runs, <code>topo</code> lists leaves first and the final loss last. We then iterate it <em>in reverse</em>, so the loss is handled first and gradients flow toward the leaves.</p>
+
+<div class="box info">
+<strong>But why bother with a topological sort?</strong>
+Because gradients can only flow in one order: a node's gradient isn't finished until <em>every</em> parent that uses it has pushed down its share. If <code>d = c + 1</code> and <code>c = a &times; b</code>, we must finish <code>d</code> before we touch <code>c</code> — otherwise <code>c</code> would hand a half-computed gradient to <code>a</code> and <code>b</code>. Topological sort guarantees that "all parents before any child" ordering automatically, no matter how tangled the graph gets, so we never process a node too early.
+</div>
+
+<h3>Step 2 — seed the loss with gradient 1</h3>
+
+<p>We start the chain at the very end. The question "how much does the loss change if the loss changes?" answers itself: by exactly the same amount. So <span class="math">d(loss)/d(loss) = 1</span>. That single line — <code>grad[0] = 1</code> — kick-starts the entire backward flow.</p>
+
+<h3>Step 3 — the one line that is the chain rule</h3>
+
+<p>For each node, in reverse order, we push gradient down to its children:</p>
+
+<div class="math-block">
+child.grad &nbsp;+=&nbsp; localGrad × parent.grad
+</div>
+
+<p>Read it as the chain rule made literal. <code>parent.grad</code> is "how much the loss cares about this parent" (the rate from here to the end). <code>localGrad</code> is "how much the parent cares about this child" (one local link). Multiply them and you get "how much the loss cares about the child". And it is <code>+=</code>, not <code>=</code>, because a child used in several places must <strong>add up</strong> all the gradient it receives from every parent.</p>
+
+<div class="box info">
+<strong>But why does <code>grad</code> accumulate with <code>+=</code> instead of <code>=</code>?</strong>
+Because one value can feed into several places. Say <code>a</code> is used in both <code>c = a &times; b</code> and <code>d = a + e</code>. Changing <code>a</code> then moves the loss through <em>two</em> separate paths, so <code>a</code>'s true gradient is the <strong>sum</strong> of what flows back from <code>c</code> and from <code>d</code> — that's the multivariate chain rule. If we used <code>=</code>, the second path would overwrite the first and we'd silently lose half the gradient. <code>+=</code> lets every parent add its own contribution.
+</div>
+
+<h3>Full worked example: <span class="math">loss = a × b + c</span></h3>
+
+<p>Take <strong>a = 3, b = 2, c = 4</strong>. The forward pass builds this graph (values flow left → right):</p>
+
+<pre style="background:#1e1e2e;color:#cdd6f4"><code class="language-text">  a=3 ─┐
+       ├─[ × ]── ab=6 ─┐
+  b=2 ─┘               ├─[ + ]── loss=10
+                 c=4 ──┘
+</code></pre>
+
+<p>Now backward (gradients flow right → left). Watch each <span class="math">child.grad += localGrad × parent.grad</span>:</p>
+
+<table>
+<tr><th>Node</th><th>What we do</th><th>Result</th></tr>
+<tr><td><strong>loss</strong></td><td>Seed it.</td><td><code>loss.grad = 1</code></td></tr>
+<tr><td><strong>+ node</strong></td><td>It is the loss. Children <code>ab</code> and <code>c</code>, both local grads = 1. Push <code>1 × 1</code> to each.</td><td><code>ab.grad += 1</code>, <code>c.grad += 1</code></td></tr>
+<tr><td><strong>× node</strong> (ab)</td><td>Its grad is now 1. Children <code>a</code>, <code>b</code> with local grads <code>b=2</code> and <code>a=3</code>. Push <code>2×1</code> and <code>3×1</code>.</td><td><code>a.grad += 2</code>, <code>b.grad += 3</code></td></tr>
+</table>
+
+<p>Final gradients: <strong>a.grad = 2, b.grad = 3, c.grad = 1</strong>. Let's sanity-check <code>a</code>: if we bump <span class="math">a</span> from 3 to 3.01, then <span class="math">ab</span> goes from 6 to 6.02 (because b=2), and the loss rises by 0.02. That's a rate of <span class="math">0.02 / 0.01 = 2</span> — exactly the gradient the engine computed. The math is real, and the engine got it right without us writing a single derivative.</p>
+
+<h2>6. Interactive: watch gradients flow</h2>
+
+<p>This is the same graph, live. Change <code>a</code>, <code>b</code>, <code>c</code> and run the forward pass to see values flow left-to-right. Then run backward to watch gradients fill in right-to-left — nodes glow redder the larger their gradient.</p>
+
+<div class="demo">
+<h4>Demo: computation graph for <span class="math">loss = a × b + c</span></h4>
+<canvas id="graphCanvas" width="620" height="300"></canvas>
+<div class="controls">
+<label>a <input type="number" id="valA" value="3" step="1" style="width:60px"></label>
+<label>b <input type="number" id="valB" value="2" step="1" style="width:60px"></label>
+<label>c <input type="number" id="valC" value="4" step="1" style="width:60px"></label>
+<button id="btnForward">▶ Forward</button>
+<button id="btnBackward">◀ Backward</button>
+<button id="btnReset">Reset</button>
+</div>
+<div class="output" id="graphOut">Press "Forward" to compute values, then "Backward" to compute gradients.</div>
+</div>
+
+<h2>7. Why does any of this matter?</h2>
+
+<p>microGPT has <strong>4,192 parameters</strong> — 4,192 little numbers (the weights) that define the model's behavior. After one forward pass and one <code>backward()</code> call, <em>every one of them</em> has its <code>.grad</code> filled in. And each gradient is a precise instruction:</p>
+
+<div class="box tip">
+<strong>What a gradient tells you</strong>
+For each parameter: <em>"If you increase me, the loss goes</em> <strong>up</strong> <em>by this much (positive grad) or</em> <strong>down</strong> <em>by this much (negative grad)."</em> We want the loss <em>low</em> (the model less wrong). So we nudge every parameter a tiny step in the direction <strong>opposite</strong> its gradient. Loss goes down. Repeat a thousand times.
+</div>
+
+<div class="box tip">
+<strong>Real-life analogy</strong>
+A gradient is a compass. You're lost in foggy mountains and want to reach the valley
+(lowest loss). You can't see the valley, but you <em>can</em> feel which way the ground
+slopes under your feet — and that slope <em>is</em> the gradient. It tells you "take a
+step <em>this</em> way to go downhill." Gradient descent is just always stepping in the
+downhill direction, over and over, until you reach the bottom.
+</div>
+
+<p>That repeated nudging — compute loss, call <code>backward()</code>, step every parameter against its gradient — <strong>is learning</strong>. There is no other magic. The <code>Value</code> class you just understood is the machinery that makes it possible, and the optimizer that does the nudging is the subject of the Training chapter.</p>
+
+<div class="box info">
+<strong>Recap</strong>
+<ul style="margin-bottom:0">
+<li>A <strong>derivative</strong> is a rate of change: nudge the input, measure the output's response.</li>
+<li>The <strong>chain rule</strong> multiplies local rates along a chain of operations.</li>
+<li>A <strong>Value</strong> is a smart number storing <code>data</code> (forward) and <code>grad</code> (backward), plus its <code>children</code> and <code>localGrads</code>.</li>
+<li><code>backward()</code> topologically sorts the graph, seeds <code>loss.grad = 1</code>, and applies <code>child.grad += localGrad × parent.grad</code> in reverse.</li>
+<li>Those gradients tell us how to change every parameter to lower the loss. That is learning.</li>
+</ul>
+</div>
+
+<div class="page-nav"></div>
+</main>
+
+<script src="../js/nav.js"></script>
+<script src="../js/highlight.js"></script>
+<script>
+// ─────────────────────────────────────────────────────────
+// Demo 1: tangent line on a simple hill curve  y = -(x^2)/20 + 8
+// ─────────────────────────────────────────────────────────
+(function () {
+  const cv = document.getElementById('tangentCanvas');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const slider = document.getElementById('tangentX');
+  const out = document.getElementById('tangentOut');
+
+  // world -> screen mapping
+  const ox = W / 2, oy = H - 30, sx = 9, sy = 9;
+  const fx = x => ox + x * sx;
+  const fy = y => oy - y * sy;
+
+  function curve(x) { return -(x * x) / 20 + 8; }     // the hill
+  function deriv(x) { return -(2 * x) / 20; }          // its slope = -x/10
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    // axes
+    ctx.strokeStyle = '#ddd';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(W, oy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ox, 0); ctx.lineTo(ox, H); ctx.stroke();
+
+    // curve
+    ctx.strokeStyle = '#4361ee';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let px = 0; px <= W; px++) {
+      const x = (px - ox) / sx;
+      const y = curve(x);
+      if (px === 0) ctx.moveTo(px, fy(y)); else ctx.lineTo(px, fy(y));
+    }
+    ctx.stroke();
+
+    // point + tangent
+    const x0 = parseFloat(slider.value) / 1.0;
+    const y0 = curve(x0);
+    const m = deriv(x0);
+
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const dx = 9;
+    ctx.moveTo(fx(x0 - dx), fy(y0 + m * (-dx)));
+    ctx.lineTo(fx(x0 + dx), fy(y0 + m * (dx)));
+    ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.arc(fx(x0), fy(y0), 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    let sign = m > 0.02 ? 'positive (uphill)' : (m < -0.02 ? 'negative (downhill)' : 'zero (flat top!)');
+    out.innerHTML = 'slope (derivative) = ' + m.toFixed(2) + ' &rarr; ' + sign;
+  }
+
+  slider.addEventListener('input', draw);
+  draw();
+})();
+
+// ─────────────────────────────────────────────────────────
+// Demo 2: computation graph  loss = a*b + c, forward + backward
+// ─────────────────────────────────────────────────────────
+(function () {
+  const cv = document.getElementById('graphCanvas');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const out = document.getElementById('graphOut');
+
+  // node layout: {x, y, label}
+  const nodes = {
+    a:    { x: 70,  y: 60,  label: 'a' },
+    b:    { x: 70,  y: 160, label: 'b' },
+    c:    { x: 70,  y: 250, label: 'c' },
+    ab:   { x: 300, y: 110, label: 'a×b' },
+    loss: { x: 520, y: 175, label: 'loss' }
+  };
+  const edges = [['a', 'ab'], ['b', 'ab'], ['ab', 'loss'], ['c', 'loss']];
+
+  // state
+  let data = {}, grad = {}, showGrad = false;
+
+  function compute() {
+    const a = parseFloat(document.getElementById('valA').value) || 0;
+    const b = parseFloat(document.getElementById('valB').value) || 0;
+    const c = parseFloat(document.getElementById('valC').value) || 0;
+    data = { a, b, c, ab: a * b, loss: a * b + c };
+  }
+  function computeGrad() {
+    // backward through loss = ab + c, ab = a*b
+    const g = { loss: 1 };
+    g.ab = 1 * g.loss;        // d loss / d ab = 1
+    g.c  = 1 * g.loss;        // d loss / d c  = 1
+    g.a  = data.b * g.ab;     // d ab / d a = b
+    g.b  = data.a * g.ab;     // d ab / d b = a
+    grad = g;
+  }
+
+  function gradColor(name) {
+    if (!showGrad || grad[name] === undefined) return '#ffffff';
+    const mag = Math.min(Math.abs(grad[name]), 8) / 8;       // 0..1
+    const r = 255;
+    const gB = Math.round(255 - mag * 175);
+    return `rgb(${r},${gB},${gB})`;
+  }
+
+  function drawNode(n, name) {
+    const w = 96, h = 56;
+    // box
+    ctx.fillStyle = gradColor(name);
+    ctx.strokeStyle = '#3a0ca3';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(n.x - w / 2, n.y - h / 2, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+    // label
+    ctx.fillStyle = '#1a1a2e';
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(n.label, n.x, n.y - 14);
+    // data
+    const dv = data[name];
+    ctx.font = '13px monospace';
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillText(dv === undefined ? '—' : ('val ' + round(dv)), n.x, n.y + 4);
+    // grad
+    if (showGrad && grad[name] !== undefined) {
+      ctx.fillStyle = '#c0392b';
+      ctx.font = 'bold 13px monospace';
+      ctx.fillText('grad ' + round(grad[name]), n.x, n.y + 20);
+    }
+  }
+
+  function round(v) { return (Math.round(v * 1000) / 1000).toString(); }
+
+  function draw() {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    // edges
+    edges.forEach(([from, to]) => {
+      const a = nodes[from], b = nodes[to];
+      ctx.strokeStyle = showGrad ? '#e74c3c' : '#888';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(a.x + 48, a.y);
+      ctx.lineTo(b.x - 48, b.y);
+      ctx.stroke();
+      // arrowhead
+      const dir = showGrad ? -1 : 1;          // backward arrows point left
+      const tipX = showGrad ? a.x + 48 : b.x - 48;
+      const tipY = showGrad ? a.y : b.y;
+      ctx.fillStyle = showGrad ? '#e74c3c' : '#888';
+      ctx.beginPath();
+      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(tipX - dir * 9, tipY - 5);
+      ctx.lineTo(tipX - dir * 9, tipY + 5);
+      ctx.fill();
+    });
+    Object.keys(nodes).forEach(k => drawNode(nodes[k], k));
+  }
+
+  document.getElementById('btnForward').addEventListener('click', () => {
+    compute(); showGrad = false; draw();
+    out.textContent =
+      'Forward: a×b = ' + round(data.ab) + ', then + c = ' + round(data.loss) +
+      '.  Values flow left → right. Now press Backward.';
+  });
+  document.getElementById('btnBackward').addEventListener('click', () => {
+    if (data.loss === undefined) compute();
+    computeGrad(); showGrad = true; draw();
+    out.textContent =
+      'Backward: loss.grad = 1 → a.grad = b = ' + round(grad.a) +
+      ', b.grad = a = ' + round(grad.b) + ', c.grad = ' + round(grad.c) +
+      '.  Gradients flow right → left; redder = larger gradient.';
+  });
+  document.getElementById('btnReset').addEventListener('click', () => {
+    data = {}; grad = {}; showGrad = false; draw();
+    out.textContent = 'Press "Forward" to compute values, then "Backward" to compute gradients.';
+  });
+
+  // polyfill roundRect for older canvas
+  if (!ctx.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+      this.moveTo(x + r, y);
+      this.arcTo(x + w, y, x + w, y + h, r);
+      this.arcTo(x + w, y + h, x, y + h, r);
+      this.arcTo(x, y + h, x, y, r);
+      this.arcTo(x, y, x + w, y, r);
+      this.closePath();
+      return this;
+    };
+  }
+
+  compute(); draw();
+})();
+</script>
+</body>
+</html>

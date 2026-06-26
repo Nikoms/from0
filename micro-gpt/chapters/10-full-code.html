@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Full Java Code Walkthrough — MicroGPT Course</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  .columns { display: flex; gap: 18px; flex-wrap: wrap; margin: 16px 0 26px; }
+  .columns .col { flex: 1; min-width: 280px; }
+  .columns .col h4 { margin: 0 0 6px; }
+  .columns pre { margin: 0; }
+  .annotation-text { background: #f8f8ff; border-left: 4px solid var(--accent);
+    padding: 12px 16px; border-radius: 6px; margin: 4px 0 22px; font-size: .95em; }
+  .annotation-text .chiplink { display:inline-block; margin-top:8px; font-size:.85em;
+    background:#eef1ff; color:var(--accent2); padding:3px 10px; border-radius:20px;
+    text-decoration:none; font-weight:600; }
+  .annotation-text .chiplink:hover { background:#e0e6ff; }
+  .secnum { display:inline-block; width:30px; height:30px; line-height:30px; text-align:center;
+    background:var(--accent); color:#fff; border-radius:50%; font-weight:700; font-size:.8em;
+    margin-right:8px; vertical-align:middle; }
+  .runbox { background:#1e1e2e; color:#cdd6f4; font-family:'SF Mono','Fira Code',monospace;
+    font-size:.85em; padding:16px 18px; border-radius:8px; margin:14px 0; line-height:1.6;
+    overflow-x:auto; box-shadow:var(--shadow); }
+  .runbox .dim{color:#6c7086;} .runbox .good{color:#a6e3a1;} .runbox .cmd{color:#f9e2af;}
+</style>
+</head>
+<body>
+<button id="hamburger">&#9776;</button>
+<nav id="sidebar"></nav>
+<div class="progress-bar"><div class="fill"></div></div>
+<main id="content">
+
+  <h1>Full Java Code Walkthrough</h1>
+  <p class="subtitle">
+    <span class="difficulty advanced">Advanced</span>
+    The capstone. The entire ~300-line program, broken into eleven sections, each explained and
+    cross-referenced to the chapter that covers it in depth. Everything you've learned, in one place.
+  </p>
+
+  <p>
+    This is the whole thing — Andrej Karpathy's <code>microgpt.py</code> ported to a single Java
+    file. No frameworks, no libraries, no GPU. Just <code>java.util</code> and arithmetic. If a
+    section feels dense, follow its chapter link back to the slow explanation. Java is shown as the
+    source of truth; alongside several sections we put the equivalent Python so you can see how
+    little the language matters — the <em>algorithm</em> is identical.
+  </p>
+
+  <div class="box info">
+    <strong>One file, two halves</strong>
+    The top half <em>defines</em> the machine: the <code>Value</code> autograd engine and the math
+    functions (<code>linear</code>, <code>softmax</code>, <code>rmsnorm</code>, <code>gpt</code>).
+    The bottom half — <code>main()</code> — <em>uses</em> it: load data, train, generate. Read it
+    in that order and it tells a story.
+  </div>
+
+  <h2><span class="secnum">1</span>Imports &amp; class declaration</h2>
+  <pre><code class="language-java">package net.dev4any1.microgpt;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.net.URI;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
+
+/*
+ * Port of the microgpt.py orig. source code:
+ * https://gist.github.com/karpathy/8627fe009c40f57531cb18360106ce95
+ * The most atomic way to train and run inference for a GPT
+ * This file is the complete algorithm.
+ * Everything else is just efficiency. @karpathy
+ */
+public class GPT {</code></pre>
+  <div class="annotation-text">Pure Java boilerplate. Standard <code>java.util</code> collections (<code>List</code>, <code>Map</code>, <code>Random</code>…), plus <code>java.io</code>/<code>java.net</code> used once to download the names dataset. The comment block is Karpathy's: this single file <em>is</em> the complete algorithm — &ldquo;everything else is just efficiency.&rdquo; Note the class is <code>GPT</code>; the file is named <code>MicroGPT.java</code> here.<br><a class="chiplink" href="01-what-is-gpt.html">Ch01 · What is a GPT?</a> </div>
+  <h2><span class="secnum">2</span>The <code>Value</code> record — the autograd engine</h2>
+  <pre><code class="language-java">    // Autograd engine for recursive chain rule application
+    // through a computation graph
+    record Value(double[] data, double[] grad,
+                 Value[] children, double[] localGrads) {
+
+        Value(double v) {
+            this(new double[]{v}, new double[]{0},
+                 new Value[0], new double[0]);
+        }
+
+        static Value of(double v) {
+            return new Value(v);
+        }
+
+        double d() { return data[0]; }
+        double g() { return grad[0]; }
+        void addGrad(double v) { grad[0] += v; }
+
+        static Value op(double val, Value[] ch, double[] lg) {
+            return new Value(new double[]{val},
+                             new double[]{0}, ch, lg);
+        }
+
+        Value add(Value o) {
+            return op(d() + o.d(),
+                      new Value[]{this, o},
+                      new double[]{1, 1});
+        }
+
+        Value mul(Value o) {
+            return op(d() * o.d(),
+                      new Value[]{this, o},
+                      new double[]{o.d(), d()});
+        }
+
+        Value pow(double e) {
+            return op(Math.pow(d(), e),
+                      new Value[]{this},
+                      new double[]{e * Math.pow(d(), e - 1)});
+        }
+
+        Value log() {
+            return op(Math.log(d()),
+                      new Value[]{this},
+                      new double[]{1 / d()});
+        }
+
+        Value exp() {
+            double e = Math.exp(d());
+            return op(e, new Value[]{this}, new double[]{e});
+        }
+
+        Value relu() {
+            return op(Math.max(0, d()),
+                      new Value[]{this},
+                      new double[]{d() &gt; 0 ? 1 : 0});
+        }
+
+        Value neg() { return mul(of(-1)); }
+        Value sub(Value o) { return add(o.neg()); }
+        Value div(Value o) { return mul(o.pow(-1)); }
+
+        void backward() {
+            List&lt;Value&gt; topo = new ArrayList&lt;&gt;();
+            Set&lt;Value&gt; visited = new HashSet&lt;&gt;();
+            buildTopo(this, topo, visited);
+            grad[0] = 1;
+            for (int i = topo.size() - 1; i &gt;= 0; i--) {
+                Value v = topo.get(i);
+                for (int j = 0; j &lt; v.children.length; j++)
+                    v.children[j].addGrad(
+                        v.localGrads[j] * v.grad[0]);
+            }
+        }
+
+        static void buildTopo(Value v, List&lt;Value&gt; topo,
+                               Set&lt;Value&gt; visited) {
+            if (visited.add(v)) {
+                for (Value c : v.children)
+                    buildTopo(c, topo, visited);
+                topo.add(v);
+            }
+        }
+    }</code></pre>
+  <div class="annotation-text">This is Chapter 5 made concrete. Each <code>Value</code> holds its number (<code>data</code>), its gradient (<code>grad</code>), and pointers to the <code>children</code> it was built from plus the <em>local</em> derivative w.r.t. each child (<code>localGrads</code>). Every operation (<code>add</code>, <code>mul</code>, <code>pow</code>, <code>log</code>, <code>exp</code>, <code>relu</code>) records those links, silently building a computation graph. <code>backward()</code> then topologically sorts the graph and walks it in reverse, multiplying local gradients along the way — the chain rule, automated.<br><a class="chiplink" href="05-autograd.html">Ch05 · Automatic Differentiation</a> </div>
+  <div class="columns">
+    <div class="col"><h4>Java (ours)</h4><pre><code class="language-java">        Value add(Value o) {
+            return op(d() + o.d(),
+                      new Value[]{this, o},
+                      new double[]{1, 1});
+        }
+
+        Value mul(Value o) {
+            return op(d() * o.d(),
+                      new Value[]{this, o},
+                      new double[]{o.d(), d()});
+        }</code></pre></div>
+    <div class="col"><h4>Python (Karpathy's original)</h4><pre><code class="language-python">class Value:
+    def __init__(self, data, _children=()):
+        self.data = data
+        self.grad = 0.0
+        self._prev = set(_children)
+        self._backward = lambda: None
+    def __add__(self, other):
+        out = Value(self.data + other.data, (self, other))
+        def _backward():
+            self.grad += out.grad
+            other.grad += out.grad
+        out._backward = _backward
+        return out</code></pre></div>
+  </div>
+  <h2><span class="secnum">3</span>Hyperparameters</h2>
+  <pre><code class="language-java">    // Model hyperparameters for the transformer network
+    static int nLayer = 1,
+               nEmbd = 16,
+               blockSize = 16,
+               nHead = 4,
+               headDim = nEmbd / nHead,
+               vocabSize;
+
+    static Map&lt;String, Value[][]&gt; sd = new HashMap&lt;&gt;();
+    static List&lt;Value&gt; params = new ArrayList&lt;&gt;();
+    static Random rng = new Random(42);
+    static List&lt;Character&gt; uchars;
+    static int BOS;</code></pre>
+  <div class="annotation-text">The handful of numbers that fix the model's <em>shape</em> (not learned — chosen by us). <code>nLayer = 1</code>: one transformer block. <code>nEmbd = 16</code>: every token becomes a 16-number vector (Chapter 3). <code>blockSize = 16</code>: the most characters of context the model can see at once. <code>nHead = 4</code>: attention splits into 4 parallel heads, so <code>headDim = 16/4 = 4</code> (Chapter 7). <code>vocabSize</code> is filled in later once we know the alphabet (27).<br><a class="chiplink" href="08-transformer.html">Ch08 · The Transformer</a> </div>
+  <div class="box info">
+    <strong>But why <code>new Random(42)</code> — why a fixed seed?</strong>
+    Reproducibility. A fixed seed makes the random number generator produce the <em>same</em> sequence every
+    run, so the weights initialize identically and the shuffle orders the names identically — you get the same
+    training result each time. The number 42 itself is arbitrary (a <em>Hitchhiker's Guide</em> joke); any
+    fixed value works. In research, a pinned seed is what lets you change one thing and trust that any
+    difference in the outcome came from <em>that</em> change, not from fresh randomness.
+  </div>
+  <div class="columns">
+    <div class="col"><h4>Java (ours)</h4><pre><code class="language-java">    // Model hyperparameters for the transformer network
+    static int nLayer = 1,
+               nEmbd = 16,
+               blockSize = 16,
+               nHead = 4,
+               headDim = nEmbd / nHead,
+               vocabSize;
+
+    static Map&lt;String, Value[][]&gt; sd = new HashMap&lt;&gt;();
+    static List&lt;Value&gt; params = new ArrayList&lt;&gt;();
+    static Random rng = new Random(42);
+    static List&lt;Character&gt; uchars;
+    static int BOS;</code></pre></div>
+    <div class="col"><h4>Python (Karpathy's original)</h4><pre><code class="language-python">n_layer  = 1
+n_embd   = 16
+block_size = 16
+n_head   = 4
+head_dim = n_embd // n_head</code></pre></div>
+  </div>
+  <h2><span class="secnum">4</span>Parameter initialization — <code>matrix()</code></h2>
+  <pre><code class="language-java">    static Value[][] matrix(int nout, int nin) {
+        Value[][] m = new Value[nout][nin];
+        for (int i = 0; i &lt; nout; i++)
+            for (int j = 0; j &lt; nin; j++) {
+                m[i][j] = Value.of(rng.nextGaussian() * 0.08);
+                params.add(m[i][j]);
+            }
+        return m;
+    }</code></pre>
+  <div class="annotation-text">Every weight in the model is born here. <code>matrix(nout, nin)</code> allocates an <code>nout &times; nin</code> grid of <code>Value</code>s, each a small random Gaussian number (&times; 0.08, so they start near zero), and — crucially — registers each one in the global <code>params</code> list so the optimizer can later update it. Below, <code>main()</code> calls <code>matrix()</code> to fill the <code>sd</code> (&ldquo;state dict&rdquo;) map with every named weight matrix: token embeddings <code>wte</code>, position embeddings <code>wpe</code>, the attention/MLP weights per layer, and the final <code>lm_head</code>. Total: 4,192 numbers.<br><a class="chiplink" href="03-embeddings.html">Ch03 · Embeddings</a> </div>
+  <div class="box info">
+    <strong>But why Gaussian random init with <code>std = 0.08</code>?</strong>
+    The standard deviation sets how spread out the starting weights are, and both extremes break training. Too
+    large (say 1.0) and the first predictions are wild, gradients explode, and the model diverges. Too small
+    (say 0.001) and every weight is essentially zero — the model does almost nothing and learns at a crawl.
+    0.08 is the sweet spot: large enough to break symmetry (so neurons start out different), small enough to
+    stay stable. It's no coincidence that 0.08 ≈ 1/&radic;<code>nEmbd</code>, a common scaling heuristic — the
+    right value depends on layer size.
+  </div>
+  <pre><code class="language-java">        sd.put("wte", matrix(vocabSize, nEmbd));
+        sd.put("wpe", matrix(blockSize, nEmbd));
+        sd.put("lm_head", matrix(vocabSize, nEmbd));
+        for (int i = 0; i &lt; nLayer; i++) {
+            sd.put("layer" + i + ".attn_wq",
+                   matrix(nEmbd, nEmbd));
+            sd.put("layer" + i + ".attn_wk",
+                   matrix(nEmbd, nEmbd));
+            sd.put("layer" + i + ".attn_wv",
+                   matrix(nEmbd, nEmbd));
+            sd.put("layer" + i + ".attn_wo",
+                   matrix(nEmbd, nEmbd));
+            sd.put("layer" + i + ".mlp_fc1",
+                   matrix(4 * nEmbd, nEmbd));
+            sd.put("layer" + i + ".mlp_fc2",
+                   matrix(nEmbd, 4 * nEmbd));
+        }
+        System.out.println("num params: " + params.size());</code></pre>
+  <h2><span class="secnum">5</span><code>linear()</code> — matrix &times; vector</h2>
+  <pre><code class="language-java">    static Value[] linear(Value[] x, Value[][] w) {
+        Value[] out = new Value[w.length];
+        for (int i = 0; i &lt; w.length; i++) {
+            out[i] = Value.of(0);
+            for (int j = 0; j &lt; x.length; j++)
+                out[i] = out[i].add(w[i][j].mul(x[j]));
+        }
+        return out;
+    }</code></pre>
+  <div class="annotation-text">The workhorse of every neural network: take an input vector <code>x</code> and a weight matrix <code>w</code>, and produce one output number per row by computing a dot product (Chapter 2) of that row with <code>x</code>. Every dense connection in the model — attention's Q/K/V projections, the MLP, the output head — is just a call to this. It builds <code>Value</code> nodes as it goes, so gradients flow through automatically.<br><a class="chiplink" href="06-neural-networks.html">Ch06 · Neural Network Layers</a> <a class="chiplink" href="02-vectors.html">Ch02 · Vectors</a> </div>
+  <div class="columns">
+    <div class="col"><h4>Java (ours)</h4><pre><code class="language-java">    static Value[] linear(Value[] x, Value[][] w) {
+        Value[] out = new Value[w.length];
+        for (int i = 0; i &lt; w.length; i++) {
+            out[i] = Value.of(0);
+            for (int j = 0; j &lt; x.length; j++)
+                out[i] = out[i].add(w[i][j].mul(x[j]));
+        }
+        return out;
+    }</code></pre></div>
+    <div class="col"><h4>Python (Karpathy's original)</h4><pre><code class="language-python">def linear(x, w):
+    # one output per row of w
+    return [sum(wij * xj for wij, xj in zip(row, x))
+            for row in w]</code></pre></div>
+  </div>
+  <h2><span class="secnum">6</span><code>softmax()</code> — logits &rarr; probabilities</h2>
+  <pre><code class="language-java">    static Value[] softmax(Value[] logits) {
+        double max = Arrays.stream(logits)
+            .mapToDouble(Value::d).max().getAsDouble();
+        Value[] exps = Arrays.stream(logits)
+            .map(v -&gt; v.sub(Value.of(max)).exp())
+            .toArray(Value[]::new);
+        Value total = Arrays.stream(exps)
+            .reduce(Value.of(0), Value::add);
+        return Arrays.stream(exps)
+            .map(e -&gt; e.div(total))
+            .toArray(Value[]::new);
+    }</code></pre>
+  <div class="annotation-text">Turns a list of raw scores (<em>logits</em>) into a probability distribution that sums to 1 (Chapter 4). It exponentiates each score and divides by the total. The <code>max</code> subtraction is a numerical-stability trick — it doesn't change the result (the same constant cancels top and bottom) but stops <code>exp()</code> from overflowing on large logits. Used both inside attention (to weight the heads) and at the very end (to score the next token).<br><a class="chiplink" href="04-math-basics.html">Ch04 · Probabilities &amp; Softmax</a> </div>
+  <div class="columns">
+    <div class="col"><h4>Java (ours)</h4><pre><code class="language-java">    static Value[] softmax(Value[] logits) {
+        double max = Arrays.stream(logits)
+            .mapToDouble(Value::d).max().getAsDouble();
+        Value[] exps = Arrays.stream(logits)
+            .map(v -&gt; v.sub(Value.of(max)).exp())
+            .toArray(Value[]::new);
+        Value total = Arrays.stream(exps)
+            .reduce(Value.of(0), Value::add);
+        return Arrays.stream(exps)
+            .map(e -&gt; e.div(total))
+            .toArray(Value[]::new);
+    }</code></pre></div>
+    <div class="col"><h4>Python (Karpathy's original)</h4><pre><code class="language-python">def softmax(logits):
+    m = max(v.data for v in logits)
+    exps = [(v - m).exp() for v in logits]
+    s = sum(exps)
+    return [e / s for e in exps]</code></pre></div>
+  </div>
+  <h2><span class="secnum">7</span><code>rmsnorm()</code> — keeping numbers tame</h2>
+  <pre><code class="language-java">    static Value[] rmsnorm(Value[] x) {
+        Value ms = Value.of(0);
+        for (Value xi : x)
+            ms = ms.add(xi.mul(xi));
+        ms = ms.div(Value.of(x.length));
+        Value scale = ms.add(Value.of(1e-5)).pow(-0.5);
+        return Arrays.stream(x)
+            .map(xi -&gt; xi.mul(scale))
+            .toArray(Value[]::new);
+    }</code></pre>
+  <div class="annotation-text">Normalization. As vectors pass through layers their magnitudes can drift, making training unstable. RMSNorm rescales a vector so its root-mean-square size is ~1: compute the mean of the squares, take <code>(ms + 1e-5)<sup>&minus;0.5</sup></code> (one over the square root), and multiply every component by it. The <code>1e-5</code> avoids dividing by zero. It's applied before attention, before the MLP, and once at the start.<br><a class="chiplink" href="06-neural-networks.html">Ch06 · Neural Network Layers</a> </div>
+  <div class="columns">
+    <div class="col"><h4>Java (ours)</h4><pre><code class="language-java">    static Value[] rmsnorm(Value[] x) {
+        Value ms = Value.of(0);
+        for (Value xi : x)
+            ms = ms.add(xi.mul(xi));
+        ms = ms.div(Value.of(x.length));
+        Value scale = ms.add(Value.of(1e-5)).pow(-0.5);
+        return Arrays.stream(x)
+            .map(xi -&gt; xi.mul(scale))
+            .toArray(Value[]::new);
+    }</code></pre></div>
+    <div class="col"><h4>Python (Karpathy's original)</h4><pre><code class="language-python">def rmsnorm(x):
+    ms = sum(xi * xi for xi in x) / len(x)
+    scale = (ms + 1e-5) ** -0.5
+    return [xi * scale for xi in x]</code></pre></div>
+  </div>
+  <h2><span class="secnum">8</span><code>gpt()</code> — the transformer forward pass</h2>
+  <pre><code class="language-java">    static Value[] gpt(int tokenId, int posId,
+                       List&lt;Value[]&gt;[] keys,
+                       List&lt;Value[]&gt;[] values) {
+        Value[] x = new Value[nEmbd];
+        for (int i = 0; i &lt; nEmbd; i++)
+            x[i] = sd.get("wte")[tokenId][i]
+                .add(sd.get("wpe")[posId][i]);
+
+        x = rmsnorm(x);
+
+        for (int li = 0; li &lt; nLayer; li++) {
+            // 1) Multi-head Attention block
+            Value[] xr = x;
+            x = rmsnorm(x);
+            Value[] q = linear(x,
+                sd.get("layer" + li + ".attn_wq")),
+                k = linear(x,
+                    sd.get("layer" + li + ".attn_wk")),
+                v = linear(x,
+                    sd.get("layer" + li + ".attn_wv"));
+            keys[li].add(k);
+            values[li].add(v);
+
+            Value[] xAttn = new Value[0];
+            for (int h = 0; h &lt; nHead; h++) {
+                int hs = h * headDim;
+                Value[] qh = Arrays.copyOfRange(
+                    q, hs, hs + headDim);
+                int T = keys[li].size();
+                Value[] attnLogits = new Value[T];
+                for (int t = 0; t &lt; T; t++) {
+                    attnLogits[t] = Value.of(0);
+                    for (int j = 0; j &lt; headDim; j++)
+                        attnLogits[t] = attnLogits[t].add(
+                            qh[j].mul(
+                                keys[li].get(t)[hs + j]));
+                    attnLogits[t] = attnLogits[t].div(
+                        Value.of(Math.sqrt(headDim)));
+                }
+                Value[] aw = softmax(attnLogits);
+                Value[] ho = new Value[headDim];
+                for (int j = 0; j &lt; headDim; j++) {
+                    ho[j] = Value.of(0);
+                    for (int t = 0; t &lt; T; t++)
+                        ho[j] = ho[j].add(
+                            aw[t].mul(
+                                values[li].get(t)[hs + j]));
+                }
+                xAttn = concat(xAttn, ho);
+            }
+
+            x = linear(xAttn,
+                sd.get("layer" + li + ".attn_wo"));
+            for (int i = 0; i &lt; nEmbd; i++)
+                x[i] = x[i].add(xr[i]);
+
+            // 2) MLP block
+            xr = x;
+            x = rmsnorm(x);
+            x = linear(x,
+                sd.get("layer" + li + ".mlp_fc1"));
+            for (int i = 0; i &lt; x.length; i++)
+                x[i] = x[i].relu();
+            x = linear(x,
+                sd.get("layer" + li + ".mlp_fc2"));
+            for (int i = 0; i &lt; nEmbd; i++)
+                x[i] = x[i].add(xr[i]);
+        }
+
+        return linear(x, sd.get("lm_head"));
+    }
+
+    static Value[] concat(Value[] a, Value[] b) {
+        Value[] c = new Value[a.length + b.length];
+        System.arraycopy(a, 0, c, 0, a.length);
+        System.arraycopy(b, 0, c, a.length, b.length);
+        return c;
+    }</code></pre>
+  <div class="annotation-text">The heart of the model, and the payoff of Chapters 7 and 8. For one token at one position it: (1) looks up the token embedding <code>wte</code> and adds the position embedding <code>wpe</code>; (2) runs the attention block — projects to query/key/value, caches K and V, and for each of the 4 heads computes scaled dot-product attention over <em>all positions so far</em> (the causal cache is what makes it look only backwards), then concatenates the heads and projects out; (3) runs the MLP block — <code>linear &rarr; relu &rarr; linear</code>; with a residual (<code>x + ...</code>) added around <em>both</em> blocks. Finally <code>lm_head</code> projects the 16-vector to 27 logits — one score per possible next token. <code>concat()</code> below just glues the per-head outputs back together.<br><a class="chiplink" href="07-attention.html">Ch07 · The Attention Mechanism</a> <a class="chiplink" href="08-transformer.html">Ch08 · The Transformer</a> </div>
+  <h2><span class="secnum">9</span><code>main()</code> — dataset loading &amp; vocabulary</h2>
+  <pre><code class="language-java">    @SuppressWarnings("unchecked")
+    public static void main(String[] args) throws Exception {
+        // Load the dataset of names
+        File f = new File("input.txt");
+        if (!f.exists()) {
+            try (var in = new URI(
+                "https://raw.githubusercontent.com/"
+                + "karpathy/makemore/988aa59/names.txt")
+                .toURL().openStream()) {
+                try (var out = new FileOutputStream(f)) {
+                    out.write(in.readAllBytes());
+                }
+            }
+        }
+
+        List&lt;String&gt; docs = new ArrayList&lt;&gt;(Arrays.asList(
+            new String(Files.readAllBytes(f.toPath()))
+                .split("\n")));
+        docs.removeIf(String::isBlank);
+        docs.replaceAll(String::trim);
+        Collections.shuffle(docs, rng);
+        System.out.println("num docs: " + docs.size());
+
+        String all = String.join("", docs);
+        uchars = all.chars().distinct().sorted()
+            .mapToObj(c -&gt; (char) c).toList();
+        BOS = uchars.size();
+        vocabSize = uchars.size() + 1;
+        System.out.println("vocab size: " + vocabSize);</code></pre>
+  <div class="annotation-text">Execution starts here. If <code>input.txt</code> is missing it downloads ~32,000 real names. It splits them into a list, shuffles (seeded <code>Random(42)</code> for reproducibility), then builds the <strong>vocabulary</strong>: every distinct character, sorted — the 26 lowercase letters. <code>BOS</code> (Beginning/End Of Sequence) is assigned the next free id, making <code>vocabSize = 27</code>. This is the text&rarr;numbers step from Chapter 1: characters become integer ids the model can embed.<br><a class="chiplink" href="01-what-is-gpt.html">Ch01 · Tokens &amp; Vocabulary</a> </div>
+  <div class="box info">
+    <strong>But why download names from the internet?</strong>
+    The model has nothing to learn from until you give it examples. Karpathy's <code>names.txt</code> is ~32,000
+    real first names (emma, olivia, ava, …), and the statistical patterns inside them — which letters follow
+    which, how names tend to start and end, typical lengths — are exactly what the model absorbs during
+    training. No data, nothing to imitate. The download just fetches that raw material once and caches it in
+    <code>input.txt</code>.
+  </div>
+  <div class="box info">
+    <strong>But why shuffle the training data (<code>Collections.shuffle</code>)?</strong>
+    Without shuffling, the model would see names in sorted order: every <code>a</code>-name, then every
+    <code>b</code>-name, and so on. That creates bias — after 500 <code>a</code>-names in a row it tilts toward
+    <code>a</code>-name patterns and temporarily "forgets" about <code>z</code>-names. Shuffling means each step
+    sees a random mix, so learning stays balanced across the whole alphabet instead of lurching from one
+    cluster to the next.
+  </div>
+  <h2><span class="secnum">10</span><code>main()</code> — the training loop</h2>
+  <pre><code class="language-java">        // Adam optimizer setup and training loop
+        int nSteps = 1000;
+        double lr = 0.01, b1 = 0.85, b2 = 0.99,
+               epsAdam = 1e-8;
+        double[] m = new double[params.size()],
+                 v = new double[params.size()];
+
+        for (int step = 0; step &lt; nSteps; step++) {
+            String doc = docs.get(step % docs.size());
+            List&lt;Integer&gt; tokens = new ArrayList&lt;&gt;();
+            tokens.add(BOS);
+            for (char c : doc.toCharArray())
+                tokens.add(uchars.indexOf(c));
+            tokens.add(BOS);
+
+            // Forward pass building the computation graph
+            int n = Math.min(blockSize,
+                             tokens.size() - 1);
+            List&lt;Value[]&gt;[] keys = new List[nLayer],
+                            vals = new List[nLayer];
+            for (int i = 0; i &lt; nLayer; i++) {
+                keys[i] = new ArrayList&lt;&gt;();
+                vals[i] = new ArrayList&lt;&gt;();
+            }
+
+            Value loss = Value.of(0);
+            for (int pos = 0; pos &lt; n; pos++) {
+                Value[] logits = gpt(tokens.get(pos),
+                                     pos, keys, vals);
+                Value[] probs = softmax(logits);
+                loss = loss.add(
+                    probs[tokens.get(pos + 1)]
+                        .log().neg());
+            }
+            loss = loss.div(Value.of(n));
+
+            // Backward pass for gradient computation
+            loss.backward();
+
+            // Adam parameter update with linear LR decay
+            double lrt = lr * (1.0 - step / (double) nSteps);
+            for (int i = 0; i &lt; params.size(); i++) {
+                double g = params.get(i).g();
+                m[i] = b1 * m[i] + (1 - b1) * g;
+                v[i] = b2 * v[i] + (1 - b2) * g * g;
+                double mh = m[i]
+                    / (1 - Math.pow(b1, step + 1)),
+                    vh = v[i]
+                    / (1 - Math.pow(b2, step + 1));
+                params.get(i).data[0] -=
+                    lrt * mh / (Math.sqrt(vh) + epsAdam);
+                params.get(i).grad[0] = 0;
+            }
+
+            System.out.printf(
+                "\rstep %4d/%4d | loss %.4f",
+                step + 1, nSteps, loss.d());
+        }</code></pre>
+  <div class="annotation-text">Chapter 9 in code. Set up Adam's state (<code>m</code>, <code>v</code> arrays). For each of 1,000 steps: take a name, wrap it in <code>BOS</code> markers and tokenize; run the forward pass across positions, accumulating cross-entropy <code>loss</code> (&minus;log of the correct token's probability); call <code>loss.backward()</code> to fill every gradient; then the Adam update steps all 4,192 parameters downhill with a linearly-decaying learning rate, and zeroes the gradients. The <code>\r</code> in the printf redraws the loss in place so you watch it fall live.<br><a class="chiplink" href="09-training.html">Ch09 · Training &amp; Optimization</a> </div>
+  <div class="columns">
+    <div class="col"><h4>Java (ours)</h4><pre><code class="language-java">                m[i] = b1 * m[i] + (1 - b1) * g;
+                v[i] = b2 * v[i] + (1 - b2) * g * g;
+                double mh = m[i]
+                    / (1 - Math.pow(b1, step + 1)),
+                    vh = v[i]
+                    / (1 - Math.pow(b2, step + 1));
+                params.get(i).data[0] -=
+                    lrt * mh / (Math.sqrt(vh) + epsAdam);
+                params.get(i).grad[0] = 0;</code></pre></div>
+    <div class="col"><h4>Python (Karpathy's original)</h4><pre><code class="language-python">m[i] = b1 * m[i] + (1 - b1) * g
+v[i] = b2 * v[i] + (1 - b2) * g * g
+mh = m[i] / (1 - b1 ** (step + 1))
+vh = v[i] / (1 - b2 ** (step + 1))
+p.data -= lr * mh / (vh ** 0.5 + eps)</code></pre></div>
+  </div>
+  <div class="box tip">
+    <strong>Concrete example</strong>
+    <p>
+      <strong>Input:</strong> nothing but the dataset and 4,192 random weights. <strong>Output:</strong> the
+      live loss readout as the loop runs (the <code>\r</code> redraws one line in place):
+    </p>
+    <pre><code>num docs: 32033
+vocab size: 27
+num params: 4192
+step    1/1000 | loss 3.4011
+step  500/1000 | loss 2.3110
+step 1000/1000 | loss 2.1903</code></pre>
+    <p>
+      Read those three loss numbers as the whole story of training. Step 1's <code>3.40</code> is essentially
+      &minus;ln(1/27) — the model is guessing uniformly among 27 characters. By step 500 it's down to
+      <code>2.31</code>, and by step 1000 <code>2.19</code>: the model now puts real probability on the
+      letters that actually tend to follow, so it's "surprised" by the next character far less often. That
+      <code>3.40 &rarr; 2.19</code> drop <em>is</em> the learning — no rule about names was ever written down.
+    </p>
+  </div>
+
+  <div class="box tip">
+    <strong>Real-life analogy</strong>
+    The whole training process is a child learning to write names by hand. Show a child
+    who has never seen a name 32,000 name cards, one at a time. At first they scribble
+    randomly. But gradually they notice patterns: names often start with consonants,
+    vowels appear frequently, certain letter pairs are common ("th", "sh", "an"). After
+    working through all 32,000 cards (1,000 training steps over batches), they can invent
+    plausible new names they've never seen. That's exactly what this loop does — just with
+    numbers instead of handwriting.
+  </div>
+
+  <h2><span class="secnum">11</span><code>main()</code> — inference (generating names)</h2>
+  <pre><code class="language-java">        // Inference: generating new names from the model
+        double temp = 0.5;
+        System.out.println(
+            "\n--- inference (new, hallucinated names) ---");
+        for (int s = 0; s &lt; 20; s++) {
+            List&lt;Value[]&gt;[] keys = new List[nLayer],
+                            vals = new List[nLayer];
+            for (int i = 0; i &lt; nLayer; i++) {
+                keys[i] = new ArrayList&lt;&gt;();
+                vals[i] = new ArrayList&lt;&gt;();
+            }
+            int tokenId = BOS;
+            StringBuilder sb = new StringBuilder();
+            for (int pos = 0; pos &lt; blockSize; pos++) {
+                Value[] logits = gpt(tokenId, pos,
+                                     keys, vals);
+                double[] probs = new double[vocabSize];
+                Value[] scaled = new Value[vocabSize];
+                for (int i = 0; i &lt; vocabSize; i++)
+                    scaled[i] = Value.of(
+                        logits[i].d() / temp);
+                Value[] ps = softmax(scaled);
+                for (int i = 0; i &lt; vocabSize; i++)
+                    probs[i] = ps[i].d();
+                double r = rng.nextDouble(), cum = 0;
+                tokenId = vocabSize - 1;
+                for (int i = 0; i &lt; vocabSize; i++) {
+                    cum += probs[i];
+                    if (r &lt; cum) {
+                        tokenId = i;
+                        break;
+                    }
+                }
+                if (tokenId == BOS) break;
+                sb.append(uchars.get(tokenId));
+            }
+            System.out.printf("sample %2d: %s%n",
+                              s + 1, sb);
+        }
+    }</code></pre>
+  <div class="annotation-text">The fun part. With training done, generate 20 brand-new names. Start from <code>BOS</code>, run <code>gpt()</code> to get logits, divide them by <code>temp = 0.5</code> (<strong>temperature</strong> &lt; 1 sharpens the distribution toward confident picks — Chapter 4), softmax to probabilities, then <em>sample</em>: draw a random number and walk the cumulative probabilities to pick a token. Append its character and feed it back as the next input. Stop when the model emits <code>BOS</code> (&ldquo;name finished&rdquo;) or we hit <code>blockSize</code>. These names exist nowhere in the training data — the model invented them.<br><a class="chiplink" href="04-math-basics.html">Ch04 · Temperature &amp; Sampling</a> </div>
+
+
+  <div class="box tip">
+    <strong>Concrete example</strong>
+    <p>
+      Let's hand-generate one name, character by character. (Probabilities below are illustrative — the real
+      ones come from the trained weights.)
+    </p>
+    <ol style="margin:8px 0 0 18px">
+      <li>
+        <strong>Start</strong> with <code>tokenId = BOS</code>, position 0.
+      </li>
+      <li>
+        <code>gpt(BOS, 0)</code> &rarr; 27 raw logits. Divide each by <code>temp = 0.5</code> (this
+        <em>sharpens</em> the distribution — dividing by a number &lt; 1 stretches the gaps), then softmax:<br>
+        <code>{'a':0.18, 'm':0.12, 's':0.09, &hellip;}</code>. Draw a random number, walk the cumulative
+        probabilities &rarr; lands on <code>m</code>.
+      </li>
+      <li>
+        Feed <code>m</code> back: <code>gpt('m', 1)</code> &rarr; softmax &rarr;
+        <code>{'a':0.52, 'e':0.11, 'i':0.08, &hellip;}</code> &rarr; sample &rarr; <code>a</code>.
+      </li>
+      <li>
+        <code>gpt('a', 2)</code> &rarr; <code>{'r':0.21, 'n':0.14, &hellip;}</code> &rarr; <code>r</code>.
+      </li>
+      <li>
+        <code>gpt('r', 3)</code> &rarr; <code>{'a':0.40, &hellip;}</code> &rarr; <code>a</code>.
+      </li>
+      <li>
+        <code>gpt('a', 4)</code> &rarr; this time the sample lands on <code>BOS</code> &rarr; the name is
+        finished.
+      </li>
+    </ol>
+    <p>
+      <strong>Output:</strong> <code>m &rarr; a &rarr; r &rarr; a</code> = <strong>"mara"</strong> — a name the
+      model invented, character by character, that never appears verbatim in any single training step's
+      objective. Lowering <code>temp</code> makes it pick the popular letters more often (safer, more
+      repetitive names); raising it flattens the distribution (weirder, more varied names).
+    </p>
+  </div>
+
+  <h2>Running it yourself</h2>
+  <p>
+    No build tools, no dependencies. You need a JDK (<strong>Java 17 or newer</strong>) on your
+    path. With the source saved as <code>GPT.java</code> (drop the <code>package</code> line on the
+    first line if you want the simplest possible compile), from that folder:
+  </p>
+
+  <div class="runbox">
+<span class="dim"># 1. compile — produces GPT.class</span>
+<span class="cmd">javac GPT.java</span>
+
+<span class="dim"># 2. run — trains for ~1000 steps, then generates 20 names</span>
+<span class="cmd">java GPT</span>
+  </div>
+
+  <p>The first run downloads <code>names.txt</code> (~228&nbsp;KB) into <code>input.txt</code>, then
+  trains for a couple of minutes on a single CPU core. Expected output:</p>
+
+  <div class="runbox">
+<span class="dim">num docs: 32033</span>
+<span class="dim">vocab size: 27</span>
+<span class="dim">num params: 4192</span>
+step    1/1000 | loss 3.4011
+step  500/1000 | loss 2.3110
+step 1000/1000 | loss <span class="good">2.1903</span>
+<span class="dim">--- inference (new, hallucinated names) ---</span>
+sample  1: <span class="good">shade</span>
+sample  2: <span class="good">jara</span>
+sample  3: <span class="good">amara</span>
+<span class="dim">...</span>
+  </div>
+
+  <div class="box tip">
+    <strong>You've read the whole machine</strong>
+    Every line above maps to something you now understand: a <code>Value</code> graph that
+    differentiates itself, vectors and dot products, embeddings, softmax, attention, a transformer
+    block, and a training loop driven by gradient descent. That is — structurally — the same
+    program running inside ChatGPT. The remaining difference is just scale. Flip to the
+    <a href="../glossary.html">Glossary</a> any time a term slips.
+  </div>
+  <div class="page-nav"></div>
+</main>
+
+<script src="../js/nav.js"></script>
+<script src="../js/highlight.js"></script>
+</body>
+</html>
