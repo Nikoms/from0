@@ -232,6 +232,255 @@
   </div>
   <p class="wt-hint">Navigate with <kbd>&larr;</kbd> <kbd>&rarr;</kbd> arrow keys</p>
 
+  <!-- ═══════════════════════════════════════ -->
+  <!-- Bonus: What about unknown words?       -->
+  <!-- ═══════════════════════════════════════ -->
+  <h2 style="margin-top:60px;">Bonus — What About Words the Model Has Never Seen?</h2>
+  <p class="subtitle">Company jargon, internal codenames, made-up terms — how does a model handle them?</p>
+
+  <div class="wt-step">
+    <div class="wt-step-header">
+      <div class="wt-step-num" style="background:#e67e22;">?</div>
+      <h2 class="wt-step-title">The problem: your vocabulary is limited</h2>
+    </div>
+    <p class="wt-desc">
+      Our microGPT knows <strong>exactly 27 tokens</strong>: the 26 lowercase letters plus BOS.
+      That's the entire universe it can see. Every input is broken into these characters.
+    </p>
+    <div class="wt-var" style="background:#f8f8fc; border:1px solid #e8e8ee; border-radius:6px; padding:14px; margin-bottom:16px;">
+      <span class="wt-var-label">microGPT vocabulary (27 tokens)</span>
+      <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:6px;">
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">a</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">b</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">c</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">d</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">e</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">f</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">g</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">h</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">i</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">j</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">k</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">l</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">m</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">n</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">o</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">p</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">q</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">r</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">s</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">t</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">u</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">v</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">w</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">x</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">y</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.12);color:#333;min-width:32px;">z</span>
+        <span class="wt-vc" style="background:rgba(231,76,60,.15);color:#c0392b;min-width:42px;font-weight:700;">BOS</span>
+      </div>
+    </div>
+    <p class="wt-desc">
+      It works because the model only generates names — sequences of lowercase letters.
+      But real-world models face a harder problem.
+    </p>
+  </div>
+
+  <div class="wt-step">
+    <div class="wt-step-header">
+      <div class="wt-step-num" style="background:#e67e22;">1</div>
+      <h2 class="wt-step-title">Real models: sub-word tokenization (BPE)</h2>
+    </div>
+    <p class="wt-desc">
+      GPT-4 doesn't use single characters. It uses <strong>Byte Pair Encoding (BPE)</strong> — a vocabulary of ~100,000 sub-word pieces learned from the training data.
+      Common words get their own token. Rare words are split into known pieces.
+    </p>
+    <div class="wt-var" style="background:#f8f8fc; border:1px solid #e8e8ee; border-radius:6px; padding:14px; margin-bottom:12px;">
+      <span class="wt-var-label">Common word → one token</span>
+      <div style="display:flex; gap:4px; margin-top:6px; align-items:center;">
+        <code style="font-size:1em;">"meeting"</code>
+        <span style="color:#999; margin:0 8px;">→</span>
+        <span class="wt-vc" style="background:rgba(46,204,113,.2);color:#1a8a1a;min-width:80px;padding:2px 12px;font-weight:600;">meeting</span>
+      </div>
+    </div>
+    <div class="wt-var" style="background:#f8f8fc; border:1px solid #e8e8ee; border-radius:6px; padding:14px; margin-bottom:12px;">
+      <span class="wt-var-label">Known word → one token</span>
+      <div style="display:flex; gap:4px; margin-top:6px; align-items:center;">
+        <code style="font-size:1em;">"JavaScript"</code>
+        <span style="color:#999; margin:0 8px;">→</span>
+        <span class="wt-vc" style="background:rgba(46,204,113,.2);color:#1a8a1a;min-width:90px;padding:2px 12px;font-weight:600;">JavaScript</span>
+      </div>
+    </div>
+    <div class="wt-var" style="background:#fff5f5; border:1px solid #fdd; border-radius:6px; padding:14px; margin-bottom:12px;">
+      <span class="wt-var-label">Company internal term → split into sub-words</span>
+      <div style="display:flex; gap:4px; margin-top:6px; align-items:center; flex-wrap:wrap;">
+        <code style="font-size:1em;">"Resona"</code>
+        <span style="color:#999; margin:0 8px;">→</span>
+        <span class="wt-vc" style="background:rgba(231,76,60,.15);color:#c0392b;min-width:50px;padding:2px 12px;font-weight:600;">Res</span>
+        <span class="wt-vc" style="background:rgba(231,76,60,.15);color:#c0392b;min-width:50px;padding:2px 12px;font-weight:600;">ona</span>
+      </div>
+    </div>
+    <div class="wt-var" style="background:#fff5f5; border:1px solid #fdd; border-radius:6px; padding:14px;">
+      <span class="wt-var-label">Internal acronym → split into characters</span>
+      <div style="display:flex; gap:4px; margin-top:6px; align-items:center; flex-wrap:wrap;">
+        <code style="font-size:1em;">"XPRJ-4521"</code>
+        <span style="color:#999; margin:0 8px;">→</span>
+        <span class="wt-vc" style="background:rgba(231,76,60,.15);color:#c0392b;min-width:38px;padding:2px 8px;font-weight:600;">X</span>
+        <span class="wt-vc" style="background:rgba(231,76,60,.15);color:#c0392b;min-width:38px;padding:2px 8px;font-weight:600;">PR</span>
+        <span class="wt-vc" style="background:rgba(231,76,60,.15);color:#c0392b;min-width:38px;padding:2px 8px;font-weight:600;">J</span>
+        <span class="wt-vc" style="background:rgba(231,76,60,.15);color:#c0392b;min-width:38px;padding:2px 8px;font-weight:600;">-</span>
+        <span class="wt-vc" style="background:rgba(231,76,60,.15);color:#c0392b;min-width:50px;padding:2px 8px;font-weight:600;">4521</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="wt-step">
+    <div class="wt-step-header">
+      <div class="wt-step-num" style="background:#e67e22;">2</div>
+      <h2 class="wt-step-title">Concrete example: comparing internal terms</h2>
+    </div>
+    <p class="wt-desc">
+      Imagine your company has two internal tools: <strong>"Pulseview"</strong> (a dashboard) and <strong>"Datawatch"</strong> (a monitoring tool).
+      The model never saw these words during training. Here's what happens to their embeddings:
+    </p>
+
+    <div class="wt-var" style="background:#f8f8fc; border:1px solid #e8e8ee; border-radius:6px; padding:14px; margin-bottom:12px;">
+      <span class="wt-var-label">"Pulseview" → tokenized as [Pulse, view] → embedding is the average-ish combination</span>
+      <div class="wt-vec" style="margin-top:6px;">
+        <span class="wt-vc" style="background:rgba(67,97,238,.35);color:#fff;">0.82</span>
+        <span class="wt-vc" style="background:rgba(231,76,60,.20);color:#333;">-0.15</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.15);color:#333;">0.23</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.50);color:#fff;">0.91</span>
+        <span class="wt-vc" style="background:rgba(231,76,60,.35);color:#fff;">-0.44</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.25);color:#333;">0.37</span>
+        <span class="wt-vc" style="background:rgba(231,76,60,.10);color:#333;">-0.08</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.40);color:#fff;">0.65</span>
+      </div>
+      <div class="wt-note">The model knows "pulse" (heartbeat, rhythm) and "view" (seeing, display). It guesses this is something about viewing rhythmic data — not wrong, but not precise.</div>
+    </div>
+
+    <div class="wt-var" style="background:#f8f8fc; border:1px solid #e8e8ee; border-radius:6px; padding:14px; margin-bottom:12px;">
+      <span class="wt-var-label">"Datawatch" → tokenized as [Data, watch] → embedding</span>
+      <div class="wt-vec" style="margin-top:6px;">
+        <span class="wt-vc" style="background:rgba(67,97,238,.30);color:#333;">0.71</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.15);color:#333;">0.22</span>
+        <span class="wt-vc" style="background:rgba(231,76,60,.15);color:#333;">-0.11</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.45);color:#fff;">0.88</span>
+        <span class="wt-vc" style="background:rgba(231,76,60,.25);color:#333;">-0.29</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.20);color:#333;">0.41</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.10);color:#333;">0.13</span>
+        <span class="wt-vc" style="background:rgba(67,97,238,.35);color:#fff;">0.58</span>
+      </div>
+      <div class="wt-note">The model knows "data" (information) and "watch" (observe, monitor). Similar vibe to Pulseview — both sound like monitoring tools.</div>
+    </div>
+
+    <div class="wt-var" style="background:#fffbe8; border:1px solid #f0e6b8; border-radius:6px; padding:14px;">
+      <span class="wt-var-label">Cosine similarity: Pulseview ↔ Datawatch</span>
+      <div style="margin-top:8px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="flex:1;height:22px;background:#eee;border-radius:4px;overflow:hidden;">
+            <div style="width:78%;height:100%;background:linear-gradient(90deg,#f59e0b,#ef4444);border-radius:4px;"></div>
+          </div>
+          <span class="wt-scalar" style="color:#b45309;">0.78</span>
+        </div>
+        <div class="wt-note">
+          High similarity! The model thinks these are similar concepts — both involve monitoring/viewing data.
+          But in your company, Pulseview is a <em>sales dashboard</em> and Datawatch is an <em>infrastructure alerting tool</em>. They do completely different things. <strong>The model can't know this.</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wt-step">
+    <div class="wt-step-header">
+      <div class="wt-step-num" style="background:#e67e22;">3</div>
+      <h2 class="wt-step-title">What goes wrong in practice</h2>
+    </div>
+    <p class="wt-desc">When you ask an LLM about company-internal terms it has never seen:</p>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+      <div style="background:#fde8e8; padding:14px 16px; border-radius:6px; border-left:4px solid #e74c3c;">
+        <strong style="color:#c0392b; font-size:.9em;">You ask:</strong>
+        <p style="margin:6px 0 0; font-size:.9em;">"What's the difference between Pulseview and Datawatch?"</p>
+      </div>
+      <div style="background:#fde8e8; padding:14px 16px; border-radius:6px; border-left:4px solid #e74c3c;">
+        <strong style="color:#c0392b; font-size:.9em;">Model answers:</strong>
+        <p style="margin:6px 0 0; font-size:.9em;">"Both appear to be data monitoring solutions. Pulseview likely focuses on real-time metrics while Datawatch provides historical analysis..."</p>
+      </div>
+    </div>
+
+    <div class="box warn" style="margin:0 0 16px;">
+      <strong>The model is confidently wrong.</strong>
+      It's reasoning purely from sub-word semantics ("pulse"+"view" vs "data"+"watch"). It has no way to know your company's actual tools.
+    </div>
+
+    <p class="wt-desc">This also means:</p>
+    <ul style="margin:0 0 16px 20px; line-height:2;">
+      <li><strong>Semantic search fails</strong> — searching "dashboard tool" might rank Pulseview and Datawatch equally, even though only one is a dashboard</li>
+      <li><strong>Comparisons are meaningless</strong> — vector similarity between internal terms reflects word structure, not actual meaning</li>
+      <li><strong>Hallucinations increase</strong> — the model fills in plausible-sounding but wrong details</li>
+    </ul>
+  </div>
+
+  <div class="wt-step">
+    <div class="wt-step-header">
+      <div class="wt-step-num" style="background:#2ecc71;">&#10003;</div>
+      <h2 class="wt-step-title">The fix: RAG or fine-tuning</h2>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+      <div style="background:#e8fde8; padding:18px 16px; border-radius:6px; border-left:4px solid #2ecc71;">
+        <strong style="color:#1a8a1a; font-size:1em;">RAG (Retrieval-Augmented Generation)</strong>
+        <p style="margin:8px 0 0; font-size:.9em;">
+          Don't rely on the model's memory. Before answering, <strong>search your company's documentation</strong> and inject the relevant paragraphs into the prompt.
+        </p>
+        <pre class="wt-code" style="font-size:.75em; margin-top:10px; padding:12px;">User: "What is Pulseview?"
+
+<span class="cm">// 1. Search company docs for "Pulseview"</span>
+<span class="cm">// 2. Found: internal wiki page</span>
+
+Context: <span class="st">"Pulseview is the sales team's
+quarterly revenue dashboard, built
+on Metabase, showing pipeline and
+closed-won by region."</span>
+
+<span class="cm">// 3. Now the model answers correctly</span>
+Model: "Pulseview is your sales team's
+  revenue dashboard..."</pre>
+        <div class="wt-note" style="margin-top:8px;">The model doesn't need to "know" the term — it reads the definition at query time. Works immediately, no training needed.</div>
+      </div>
+
+      <div style="background:#e8f4fd; padding:18px 16px; border-radius:6px; border-left:4px solid #3498db;">
+        <strong style="color:#2471a3; font-size:1em;">Fine-tuning</strong>
+        <p style="margin:8px 0 0; font-size:.9em;">
+          Re-train the model on your company's data so it <strong>learns</strong> what internal terms mean, just like it learned "JavaScript" from the internet.
+        </p>
+        <pre class="wt-code" style="font-size:.75em; margin-top:10px; padding:12px;"><span class="cm">// Training data (hundreds of examples)</span>
+{"prompt": <span class="st">"Describe Pulseview"</span>,
+ "completion": <span class="st">"Pulseview is the
+  sales revenue dashboard..."</span>}
+
+{"prompt": <span class="st">"Pulseview vs Datawatch?"</span>,
+ "completion": <span class="st">"Pulseview tracks
+  revenue; Datawatch monitors
+  infrastructure uptime..."</span>}
+
+<span class="cm">// After fine-tuning, the embedding</span>
+<span class="cm">// for "Pulseview" actually encodes</span>
+<span class="cm">// "sales dashboard" semantics</span></pre>
+        <div class="wt-note" style="margin-top:8px;">The model now "knows" the term. But requires retraining when definitions change, and costs compute.</div>
+      </div>
+    </div>
+
+    <div class="box tip" style="margin:0;">
+      <strong>When to use which?</strong>
+      <ul style="margin:8px 0 0 18px;">
+        <li><strong>RAG</strong> — when your data changes often (wikis, docs, tickets). Most common in practice.</li>
+        <li><strong>Fine-tuning</strong> — when you need the model to deeply understand your domain (medical, legal, your specific codebase).</li>
+        <li><strong>Both</strong> — fine-tune for the domain vocabulary + RAG for up-to-date facts.</li>
+      </ul>
+    </div>
+  </div>
+
   <div class="page-nav"></div>
 </main>
 
