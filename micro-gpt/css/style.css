@@ -64,6 +64,17 @@ body {
   border-left-color: var(--accent);
 }
 #sidebar a .ch { color: var(--accent); font-weight: 600; margin-right: 6px; }
+#sidebar .home-link {
+  display: block;
+  padding: 8px 20px;
+  color: #f59e0b;
+  text-decoration: none;
+  font-size: .82em;
+  font-weight: 600;
+  border-bottom: 1px solid #333;
+  margin-bottom: 8px;
+}
+#sidebar .home-link:hover { color: #fbbf24; background: rgba(245,158,11,.1); }
 #sidebar .section-label {
   padding: 16px 20px 4px;
   font-size: .7em;

@@ -23,9 +23,13 @@
   // Current page
   const currentFile = location.pathname.split('/').pop();
 
+  // Home link goes to from0 root (one level above micro-gpt/)
+  const homeHref = inChapters ? '../../' : '../';
+
   // Build sidebar HTML
   let html = `
     <div class="logo">MicroGPT<br><small>Java Course — Offline Edition</small></div>
+    <a href="${homeHref}" class="home-link">&#8962; from0 Home</a>
   `;
 
   let lastSection = '';

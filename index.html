@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>from0 — Deep dives into how things really work</title>
+<meta name="description" content="Deep dives into how things really work. No black boxes, no hand-waving — just code and clear explanations.">
 <style>
   :root {
     --bg: #fafafa;
@@ -11,36 +12,56 @@
     --accent: #4361ee;
     --accent2: #3a0ca3;
     --radius: 8px;
+    --focus: #4361ee;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: var(--bg); color: var(--text);
     line-height: 1.7; min-height: 100vh;
   }
-  .hero {
+
+  /* Skip to content (a11y) */
+  .skip-link {
+    position: absolute; top: -100%; left: 16px;
+    background: var(--accent); color: #fff;
+    padding: 8px 16px; border-radius: 0 0 var(--radius) var(--radius);
+    font-weight: 600; text-decoration: none; z-index: 100;
+  }
+  .skip-link:focus { top: 0; }
+
+  /* Focus styles */
+  :focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  header {
     text-align: center; padding: 80px 20px 60px;
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
     color: #fff;
   }
-  .hero h1 {
+  header h1 {
     font-size: 3.2em; font-weight: 800; letter-spacing: -1px;
     margin-bottom: 8px;
   }
-  .hero h1 span { color: var(--accent); }
-  .hero p {
-    font-size: 1.15em; color: #aab; max-width: 520px;
+  header h1 span { color: var(--accent); }
+  header p {
+    font-size: 1.15em; color: #c0c0d0; max-width: 520px;
     margin: 0 auto;
   }
-  .content {
+
+  main {
     max-width: 780px; margin: 0 auto;
     padding: 48px 24px 80px;
   }
-  h2 {
-    font-size: 1.1em; color: #888;
+  main > h2 {
+    font-size: 1.1em; color: #666;
     text-transform: uppercase; letter-spacing: 2px;
     margin-bottom: 20px;
   }
+
+  /* Cards */
   .card {
     display: block; text-decoration: none; color: inherit;
     background: #fff; border-radius: var(--radius);
@@ -50,7 +71,7 @@
     transition: transform .15s, box-shadow .15s;
     border-left: 4px solid var(--accent);
   }
-  .card:hover {
+  .card:hover, .card:focus-visible {
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(0,0,0,.12);
   }
@@ -60,91 +81,104 @@
   }
   .card p { color: #555; margin: 0; font-size: .95em; }
   .card .meta {
-    margin-top: 10px; font-size: .8em; color: #999;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    margin-top: 10px; font-size: .8em; color: #666;
   }
-  .card .tag {
+  .card time { color: #888; }
+
+  /* Tags */
+  .tag {
     display: inline-block; padding: 2px 10px;
     border-radius: 12px; font-size: .75em; font-weight: 600;
-    margin-right: 6px;
   }
   .tag.ai { background: #e8f4fd; color: #1a73e8; }
   .tag.testing { background: #e8fde8; color: #1a8a1a; }
-  .tag.soon { background: #f0f0f5; color: #888; }
+  .tag.soon { background: #f0f0f5; color: #666; }
+  .tag.lang { background: #fef3c7; color: #92400e; }
 
+  /* Playground variant */
   .card.playground {
     border-left-color: #f59e0b;
     background: linear-gradient(135deg, #fffbeb 0%, #fff 100%);
   }
   .card.playground h3 { color: #b45309; }
 
+  /* Coming soon */
   .coming-soon {
     border-left-color: #ddd; opacity: .6;
-    pointer-events: none;
   }
-  .coming-soon h3 { color: #999; }
+  .coming-soon h3 { color: #777; }
 
   footer {
     text-align: center; padding: 32px 20px;
-    font-size: .85em; color: #aaa;
+    font-size: .85em; color: #888;
   }
   footer a { color: var(--accent); }
 
   @media (max-width: 600px) {
-    .hero h1 { font-size: 2.2em; }
-    .hero { padding: 56px 16px 40px; }
-    .content { padding: 32px 16px 60px; }
+    header h1 { font-size: 2.2em; }
+    header { padding: 56px 16px 40px; }
+    main { padding: 32px 16px 60px; }
   }
 </style>
 </head>
 <body>
 
-<div class="hero">
+<a href="#articles" class="skip-link">Skip to content</a>
+
+<header role="banner">
   <h1>from<span>0</span></h1>
   <p>Deep dives into how things really work. No black boxes, no hand-waving — just code and clear explanations.</p>
-</div>
+</header>
 
-<div class="content">
+<main id="articles">
   <h2>Articles</h2>
 
-  <a class="card" href="micro-gpt/index.html">
+  <a class="card" href="micro-gpt/index.html" aria-label="MicroGPT — Build a GPT from Scratch in Java. June 2026.">
     <h3>MicroGPT — Build a GPT from Scratch in Java</h3>
     <p>A complete walkthrough of a minimal GPT implementation. Embeddings, attention, transformers, training — every line of code explained.</p>
     <div class="meta">
       <span class="tag ai">AI / ML</span>
-      10 chapters + interactive walkthrough
+      <span class="tag lang">Java</span>
+      <time datetime="2026-06">June 2026</time>
+      · 10 chapters + interactive walkthrough
     </div>
   </a>
 
-  <a class="card playground" href="micro-gpt/chapters/walkthrough.html">
+  <a class="card playground" href="micro-gpt/chapters/walkthrough.html" aria-label="Interactive Playground — GPT Forward Pass. June 2026.">
     <h3>&#9654; Interactive Playground — GPT Forward Pass</h3>
     <p>Step through a GPT forward pass like a debugger. Watch real numbers flow through embeddings, attention, and softmax — use arrow keys to navigate.</p>
     <div class="meta">
       <span class="tag ai">AI / ML</span>
-      15 steps · keyboard navigation
+      <span class="tag lang">Java</span>
+      <time datetime="2026-06">June 2026</time>
+      · 15 steps · keyboard navigation
     </div>
   </a>
 
-  <div class="card coming-soon">
+  <div class="card coming-soon" aria-disabled="true">
     <h3>Automated Testing — Writing Tests That Actually Help</h3>
     <p>From first principles to advanced patterns. What makes a good test, when to test, and how to build confidence without slowing down.</p>
     <div class="meta">
       <span class="tag testing">Testing</span>
+      <span class="tag lang">TypeScript</span>
       <span class="tag soon">Coming soon</span>
     </div>
   </div>
 
-  <div class="card coming-soon">
+  <div class="card coming-soon" aria-disabled="true">
     <h3>RAG — Retrieval-Augmented Generation</h3>
     <p>How to ground LLM answers in your own data. Embeddings, vector search, chunking strategies, and evaluation.</p>
     <div class="meta">
       <span class="tag ai">AI / ML</span>
+      <span class="tag lang">Python</span>
       <span class="tag soon">Coming soon</span>
     </div>
   </div>
-</div>
+</main>
 
-<footer>
-  <a href="https://github.com/Nikoms/from0">GitHub</a>
+<footer role="contentinfo">
+  <a href="https://github.com/Nikoms/from0">from0</a>
 </footer>
 
 </body>
