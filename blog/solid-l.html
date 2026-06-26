@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOLID – L: Liskov substitution — Le méchant blog</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --text: #1a1a2e;
+    --accent: #4361ee;
+    --accent2: #3a0ca3;
+    --radius: 8px;
+    --code-bg: #1e1e2e;
+    --code-text: #cdd6f4;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.7; min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #fff; padding: 40px 20px 32px;
+  }
+  header nav { max-width: 780px; margin: 0 auto; }
+  header nav a {
+    color: #f59e0b; text-decoration: none; font-size: .9em; font-weight: 600;
+  }
+  header nav a:hover { color: #fbbf24; }
+  article {
+    max-width: 780px; margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  article h1 {
+    font-size: 2em; color: var(--accent2); margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .meta {
+    color: #666; font-size: .9em; margin-bottom: 32px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .tag {
+    display: inline-block; padding: 2px 10px;
+    border-radius: 12px; font-size: .8em; font-weight: 600;
+    background: #e8f4fd; color: #1a73e8;
+  }
+  article h2 {
+    font-size: 1.4em; margin: 32px 0 12px; color: var(--accent2);
+    border-bottom: 2px solid #e8e8e8; padding-bottom: 4px;
+  }
+  article h3 { font-size: 1.15em; margin: 24px 0 8px; }
+  article p { margin-bottom: 16px; }
+  article ul, article ol { margin: 0 0 16px 24px; }
+  article li { margin-bottom: 6px; }
+  article a { color: var(--accent); }
+  article img, article .article-img {
+    max-width: 100%; height: auto; border-radius: var(--radius);
+    margin: 8px 0;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 16px 20px; border-radius: var(--radius);
+    overflow-x: auto; margin: 16px 0 20px;
+    font-size: .88em; line-height: 1.5;
+  }
+  code {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+  :not(pre) > code {
+    background: #e8e8ee; padding: 2px 6px;
+    border-radius: 4px; font-size: .9em;
+  }
+  blockquote {
+    border-left: 4px solid var(--accent);
+    padding: 12px 16px; margin: 16px 0;
+    background: #f0f0ff; border-radius: 0 var(--radius) var(--radius) 0;
+    color: #444; font-style: italic;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 16px 0;
+  }
+  th, td {
+    padding: 8px 12px; text-align: left;
+    border-bottom: 1px solid #e0e0e0; font-size: .9em;
+  }
+  th { background: #f0f0f5; font-weight: 600; }
+  footer {
+    text-align: center; padding: 32px 20px;
+    font-size: .85em; color: #888;
+  }
+  footer a { color: var(--accent); }
+  @media (max-width: 600px) {
+    article h1 { font-size: 1.5em; }
+    article { padding: 24px 16px 60px; }
+    pre { font-size: .8em; padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <nav><a href="../">&larr; from0</a></nav>
+</header>
+
+<article>
+  <h1>SOLID – L: Liskov substitution</h1>
+  <div class="meta">
+    <span class="tag">SOLID</span>
+    <time datetime="2013-12-23">23 décembre 2013</time>
+  </div>
+
+  <p>« Un carré est un rectangle ». Voilà ce que les gentils professeurs de géométrie nous ont dit. Mais, peut-on en dire de même en orienté objet ?</p>
+<h2>Carre extend Rectangle ?</h2>
+<p>En orienté objet, un rectangle est constitué de 2 attributs : « largeur » et « hauteur » avec leurs « setter » et « getter ». Rien d&rsquo;incroyable:</p><pre><code>class Rectangle
+{
+    private $largeur;
+    private $hauteur;
+
+    public function setHauteur($hauteur)
+    {
+        $this-&gt;hauteur = $hauteur;
+    }
+
+    public function getHauteur()
+    {
+        return $this-&gt;hauteur;
+    }
+
+    public function setLargeur($largeur)
+    {
+        $this-&gt;largeur = $largeur;
+    }
+
+    public function getLargeur()
+    {
+        return $this-&gt;largeur;
+    }
+}</code></pre>
+<p>Un carré, par contre, n’a qu’un attribut : « coté », avec un setter et un getter. Mais imaginons qu&rsquo;il étende la classe <em>Rectangle</em>, comme dans « la vraie vie ». Comment l&rsquo;objet <em>Carre</em> va-t-il gérer les méthodes setter et getter de rectangle ? Les méthodes « set/getHauteur » et « set/getLargeur » ne sont pas relevantes ou pertinentes pour un carré ! Essayons de contourner le problème:</p><pre><code>class Carre extends Rectangle
+{
+   //$this-&gt;hauteur représentera mon &quot;coté&quot; et $this-&gt;largeur ne sera donc plus jamais utilisé
+
+    public function setLargeur($largeurEtHauteur)
+    {
+        //Tant pis pour largeur qui sera toujours vide :(
+        $this-&gt;setHauteur($largeurEtHauteur);
+    }
+
+    public function getLargeur()
+    {
+        return $this-&gt;getHauteur();
+    }
+}</code></pre>
+<p>Tout cela « fonctionne », mais avouez qu’on est plus dans de la bidouille pour faire rentrer un carré dans un rectangle. Ceci est une violation du principe de substitution de Liskov. Notre amie Barbara Liskov (oui c’est une dame) a un jour dit :</p>
+<blockquote><p>Si « S » est un sous-type de « T », alors tout objet de type « T » peut être remplacé par un objet de type « S » sans altérer les propriétés désirables du programme concerné.</p></blockquote>
+<p>Pour en revenir à nos carrés et rectangles, cela veut dire que partout où, dans votre code, vous vous attendez à recevoir un rectangle en paramètre, vous pouvez le remplacer par un carré, sans que cela pose un souci.</p>
+<p>Ce n’est malheureusement pas le cas, car le développeur qui travaille sur un rectangle veut pouvoir changer la largeur et la hauteur indépendamment l’un de l’autre. C’est impossible avec un carré, ce qui « altère les propriétés d’un programme ».</p>
+<h2>Exemple concret</h2>
+<p>Imaginons que vous fassiez un jeu de voitures. Vous avez une classe « Voiture » avec quelques méthodes :</p><pre><code>class Voiture
+{
+
+    public function avance()
+    {
+        //...
+    }
+
+    public function recule()
+    {
+        //...
+    }
+
+    public function tourneAGauche()
+    {
+        //...
+    }
+
+    public function tourneADroite()
+    {
+        //...
+    }
+
+    public function ajouteEssence()
+    {
+        //...
+    }
+
+    public function changePneu()
+    {
+        //...
+    }
+}</code></pre>
+<p>Votre jeu fait un carton et suite à la pression médiatique, votre patron cède, et vous demande d’ajouter des voitures volantes. « VoitureVolante extend Voiture », ça vous parait pas mal:</p><pre><code>class VoitureVolante extends Voiture
+{
+}</code></pre>
+<p>Sauf que vous avez la méthode « changePneu » qui vous ennuie un peu, car une voiture volante n’a pas de pneus. Que va faire votre méthode dans ce cas-là? Que pouvez-vous faire ? Au choix :</p>
+<ul>
+<li>Réécrire la méthode et ne rien faire (méthode vide)</li>
+<li>Réécrire la méthode et lancer une exception « PasDePneuException ».</li>
+<li>Réécrire la méthode et nettoyer les réacteurs ou changer le train d’atterrissage. Mais est-ce le bon nom de méthode ?</li>
+</ul>
+<p></p><pre><code>class VoitureVolante extends Voiture
+{
+    public function changePneu()
+    {
+        //Solution1: Ne rien faire
+
+        //Solution2: faire Autre chose qui ressemble
+        $this-&gt;changeTrainAterissage();
+
+        //Solution3: Lancer une exception
+        throw new PasDePneuException();
+
+    }
+
+    //Dois-je mettre ceci en public étant donné qu'on y accède via &quot;changePneu&quot; ?
+    private function changeTrainAterissage()
+    {
+        //...
+    }
+}</code></pre>
+<p>Aucune des trois réponses n’est viable. En effet, cette méthode n’a pas lieu d’exister dans le cas d’un voiture qui n’a pas de pneu. Conclusion, une voiture volante <b><span style="text-decoration: underline;">n’est pas</span></b> une voiture.</p>
+<h2>Ça sent le problème…</h2>
+<p>Voici donc quelques pistes qui vous feront sentir que vous êtes sur la mauvaise voie :</p>
+<ul>
+<li>Vous avez une méthode qui n’a pas lieu d’être dans votre classe, mais vous devez l’implémenter.</li>
+<li>Vous avez du réécrire une méthode de la classe parente car celle-ci ne doit « surtout pas » être exécutée ou ne rien faire.</li>
+<li>Vous avez réécrit une méthode de votre parent et vous lancez une exception, alors que celle-ci n’était pas prévue dans la classe de base. Du coup, vous changez tous les appels en les englobant par un « try/catch »</li>
+<li>Vous utilisez des « instanceof » pour exécuter (ou non) une méthode spécifique (aussi mauvais que le try/catch)</li>
+<li>Vous devez modifier une classe parente pour que votre nouvelle classe fonctionne. Par exemple, ajouter des arguments optionnels.</li>
+</ul>
+<p>C’est liste est non-exhaustive, mais assez complète. Evidemment, il faut rester vigilant : Certaines de ces affirmations ne sont pas toujours une preuve qu’il y a un problème. Par exemple, les méthodes vides sont monnaies courantes lorsque nous utilisons le pattern « Template method » ou « Null object ». Nous parlerons de ces patterns (et des autres) dans un autre article.</p>
+<h2>Comment faire rouler ma voiture volante ? Utiliser le pattern « Adapteur »</h2>
+<p>Bon alors évidemment, c’est difficile de dire à votre patron : « Boss ! Vous savez, dans notre jeu, la voiture bonus qui vole… Hum… Je ne peux pas l’implémenter car elle ne répondra pas au principe de substitution de Liskov ». S’il vous répond qu’il comprend et qu’il ne faut pas l’implémenter, c’est que vous avez vraiment un patron très cool!</p>
+<p>Pour ce genre de problème, une des solutions est d&rsquo;utiliser un pattern : L’adaptateur. Je vais vous en parler très brièvement, car je compte aussi en écrire un article. En gros, c’est faire rentrer un carré dans un rond (ou un rectangle!), ou bien transformer le port « Lightning » de votre IPhone en USB. Voici un petit bout de code qui devrait vous faire comprendre le principe.</p>
+<p>D&rsquo;abord nous avons la nouvelle interface <em>IVoiture</em> et la classe <em>VoitureVolante</em> qui n&rsquo;ont pas ou peu de point commun:</p><pre><code>//Interface très simplifiée
+interface IVoiture
+{
+    public function avance();
+    public function changePneu();
+}
+
+//La Voiture volante, n'a pas la méthode changePneu, et n'est donc pas une voiture
+class VoitureVolante
+{
+    //Similaire à &quot;avance&quot; pour une voiture normale
+    public function volePlusVite()
+    {
+        echo &quot;La voiture volante avance/vole plus vite!&quot;;
+    }
+}</code></pre>
+<p>Ensuite, on va rendre la voiture volante compatible avec la voiture de base <strong>grâce à l&rsquo;adaptateur</strong>:</p><pre><code>//Mon fameux adaptateur
+class VoitureVolanteAdaptateur implements IVoiture
+{
+    private $voitureVolante;
+
+    public function __construct(VoitureVolante $voitureVolante)
+    {
+        $this-&gt;voitureVolante = $voitureVolante;
+    }
+
+    public function avance()
+    {
+        $this-&gt;voitureVolante-&gt;volePlusVite();
+    }
+
+    public function changePneu()
+    {
+        //Rien à faire
+    }
+}</code></pre>
+<p>Et à l&rsquo;exécution, c&rsquo;est assez simple:</p><pre><code>$voitureVolanteAdaptee = new VoitureVolanteAdaptateur(new VoitureVolante());
+$voitureVolanteAdaptee-&gt;avance();
+$voitureVolanteAdaptee-&gt;changePneu();</code></pre>
+<p>Certes, nous avons créé 2 classes « au lieu » d’une, mais la classe <em>VoitureVolante</em> ne se retrouve pas avec des méthodes poubelles, et ne fait que ce qu’elle doit faire.</p>
+<h2>Conclusion</h2>
+<p>Alors, qu’est-ce qu’il en ressort ? Sachez juste que l’orienté objet, ce n’est pas toujours « comme dans la vraie vie ». N’étendez pas une classe qui contient trop de méthodes pour votre nouvelle classe. Le but est de se dire : Si je n’étendais pas cette classe (ou l’interface), est-ce que j’aurais de toute façon écrit cette méthode ? S’appellerait-elle de la même manière ? Aurait-elle le même comportement globale? Est-ce que ma sortie (return) et mes erreurs (throw new Exception) sont identiques à ma classe parente?</p>
+<p>Si vous avez répondu « oui » à toutes les questions, alors, félicitations, vous avez répondu au principe de substitution de Liskov.</p>
+</article>
+
+<footer>
+  <p>Originally published on <strong>Le méchant blog</strong> &mdash; <a href="../">from0</a></p>
+</footer>
+
+</body>
+</html>

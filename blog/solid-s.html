@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOLID – S: Single Responsibility — Le méchant blog</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --text: #1a1a2e;
+    --accent: #4361ee;
+    --accent2: #3a0ca3;
+    --radius: 8px;
+    --code-bg: #1e1e2e;
+    --code-text: #cdd6f4;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.7; min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #fff; padding: 40px 20px 32px;
+  }
+  header nav { max-width: 780px; margin: 0 auto; }
+  header nav a {
+    color: #f59e0b; text-decoration: none; font-size: .9em; font-weight: 600;
+  }
+  header nav a:hover { color: #fbbf24; }
+  article {
+    max-width: 780px; margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  article h1 {
+    font-size: 2em; color: var(--accent2); margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .meta {
+    color: #666; font-size: .9em; margin-bottom: 32px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .tag {
+    display: inline-block; padding: 2px 10px;
+    border-radius: 12px; font-size: .8em; font-weight: 600;
+    background: #e8f4fd; color: #1a73e8;
+  }
+  article h2 {
+    font-size: 1.4em; margin: 32px 0 12px; color: var(--accent2);
+    border-bottom: 2px solid #e8e8e8; padding-bottom: 4px;
+  }
+  article h3 { font-size: 1.15em; margin: 24px 0 8px; }
+  article p { margin-bottom: 16px; }
+  article ul, article ol { margin: 0 0 16px 24px; }
+  article li { margin-bottom: 6px; }
+  article a { color: var(--accent); }
+  article img, article .article-img {
+    max-width: 100%; height: auto; border-radius: var(--radius);
+    margin: 8px 0;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 16px 20px; border-radius: var(--radius);
+    overflow-x: auto; margin: 16px 0 20px;
+    font-size: .88em; line-height: 1.5;
+  }
+  code {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+  :not(pre) > code {
+    background: #e8e8ee; padding: 2px 6px;
+    border-radius: 4px; font-size: .9em;
+  }
+  blockquote {
+    border-left: 4px solid var(--accent);
+    padding: 12px 16px; margin: 16px 0;
+    background: #f0f0ff; border-radius: 0 var(--radius) var(--radius) 0;
+    color: #444; font-style: italic;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 16px 0;
+  }
+  th, td {
+    padding: 8px 12px; text-align: left;
+    border-bottom: 1px solid #e0e0e0; font-size: .9em;
+  }
+  th { background: #f0f0f5; font-weight: 600; }
+  footer {
+    text-align: center; padding: 32px 20px;
+    font-size: .85em; color: #888;
+  }
+  footer a { color: var(--accent); }
+  @media (max-width: 600px) {
+    article h1 { font-size: 1.5em; }
+    article { padding: 24px 16px 60px; }
+    pre { font-size: .8em; padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <nav><a href="../">&larr; from0</a></nav>
+</header>
+
+<article>
+  <h1>SOLID – S: Single Responsibility</h1>
+  <div class="meta">
+    <span class="tag">SOLID</span>
+    <time datetime="2013-12-17">17 décembre 2013</time>
+  </div>
+
+  <p>Nous allons commencer une série d&rsquo;articles reprenant <strong><span style="text-decoration: underline;">les</span> </strong>gros principes de base en orienté objet. Ce sont 5 points à ne pas rater! Si vous débutez, cela va clairement vous aider à bien structurer votre code. Si vous êtes déjà dans le bain, cela peut vous servir de piqûre de rappel.</p>
+<p>Nous aurons donc 5 articles pour chaque lettre de l&rsquo;acronyme <strong>SOLID</strong>.</p>
+<ul>
+<li>S : Single responsibility</li>
+<li>O: Open/Closed</li>
+<li>L: Liskov substitution</li>
+<li>I: Interface segregation</li>
+<li>D: Dependency inversion</li>
+</ul>
+<p>Commençons aujourd&rsquo;hui par le premier principe: La responsabilité unique.</p>
+<h2>Single Responsibility</h2>
+<p>Le premier principe SOLID est à la fois simple et compliqué. Simple à comprendre, mais difficile à bien appliquer.</p>
+<p>« S » comme « Single Responsibility » consiste à dire qu’une classe n’a qu’une, et une seule, raison de changer. On peut aussi dire qu’une classe ne remplit qu’un rôle ou qu’elle n’a qu’une seule responsabilité. Qu’est-ce ce qu’un rôle? Il en existe probablement des milliers, mais en voici une petite liste pour vous faire une idée :</p>
+<ul>
+<li>Affichage</li>
+<li>Logique de vérification de donnée(s)</li>
+<li>Envoi d’un e-mail</li>
+<li>Communication avec la base de données</li>
+<li>Système de cache</li>
+<li>Représentation d’une entité</li>
+<li>Routage en fonction de l’URL</li>
+<li>Logique de paiement</li>
+<li>Etc.</li>
+</ul>
+<h2>Chacun son rôle, chacun son chemin</h2>
+<p>Si on a une classe « Utilisateur » qui vérifie qu’un e-mail est valide, cela veut dire qu’elle a 2 rôles : Représentation et vérification. Cette classe a donc 2 raisons d’être modifiée:</p>
+<ul>
+<li>Ajout ou modification d’un attribut de l’entité (ex : Ajout du nom de famille)</li>
+<li>Modification de la vérification d’e-mail, en passant d’une expression régulière à une méthode un peu plus avancée.</li>
+</ul>
+<p>Donc, si on utilise une entité, on embarque la vérification de l’e-mail: pas si grave. Par contre, si on veut vérifier un e-mail, on doit instancier un « Utilisateur ». Les 2 rôles sont couplés, nous avons donc une <strong>cohésion forte</strong>.</p>
+<p>On le sait : plus les responsabilités sont couplées, plus les méthodes poussent comme des champignons, plus elles ont de chances d’être modifiées, plus elles sont susceptibles d’avoir des bugs, plus elles sont fragiles, plus elles sont rigides… Bref, tout ça n’annonce rien de bon.</p>
+<h2>Des tests unitaires pour les méthodes privées ?</h2>
+<p>Vouloir faire des tests unitaires de méthodes privées n’est pas un bon présage non plus. Si vous voulez les tester grâce à la « Reflection » ou que vous voulez les « mocker » (pas de chance c’est impossible), c’est que souvent, elles cachent une logique qui devrait probablement être externalisée dans une autre classe. Voici l’exemple d’une classe qui normalise une adresse et qui y ajoute des coordonnées grâce à l’api de « Google Maps ».</p><pre><code>class JolieAdresse{
+
+}
+
+class AdresseNormalizer{
+    public function __construct($rue, $numero, $codePostal, $ville, $pays)
+    {
+        $this-&gt;rue = $rue;
+        $this-&gt;numero = $numero;
+        $this-&gt;codePostal = $codePostal;
+        $this-&gt;ville = $ville;
+        $this-&gt;pays = $pays;
+    }
+
+    public function getJolieAdresse()
+    {
+        $json = $this-&gt;getGoogleJson();
+        $jolieAdresse = new JolieAdresse();
+        $jolieAdresse-&gt;latitude = $json['results'][0]['geometry']['location']['lat'];
+        $jolieAdresse-&gt;longitude = $json['results'][0]['geometry']['location']['lng'];
+        $jolieAdresse-&gt;numero = $json['results'][0]['address_components'][0]['long_name'];
+        $jolieAdresse-&gt;rue = $json['results'][0]['address_components'][1]['long_name'];
+        $jolieAdresse-&gt;ville = $json['results'][0]['address_components'][2]['long_name'];
+        $jolieAdresse-&gt;pays = $json['results'][0]['address_components'][4]['long_name'];
+        $jolieAdresse-&gt;codePostal = $json['results'][0]['address_components'][5]['long_name'];
+
+        return $jolieAdresse;
+    }
+
+    private function getGoogleJson()
+    {
+        $adresse = $this-&gt;rue.' '.$this-&gt;numero.', '.$this-&gt;codePostal.' '. $this-&gt;ville.', ' . $this-&gt;pays;
+        $googleUrl = 'http://maps.googleapis.com/maps/api/geocode/json?address=' . urlencode($adresse) . '&amp;sensor=false';
+
+        return json_decode(file_get_contents($googleUrl),true);
+    }
+}
+
+$normalizer = new AdresseNormalizer('Avn Louise', '46', '1000', 'Bxl', 'Be');
+
+$jolieAdresse = $normalizer-&gt;getJolieAdresse();</code></pre>
+<p>&nbsp;</p>
+<p>Voilà un bout de code qui fonctionne bien et qui n’expose que ce qui doit l’être. Cependant, on peut y constater que l’objet « AdresseNormalizer » va récupérer les informations via un webservice et les convertit en un objet « JolieAdresse » : Deux responsabilités. C&rsquo;est encore plus embêtant si ma classe « JolieAdresse » est une classe spécifique à mon projet, je ne pourrai jamais réutiliser ma super classe « AdresseNormalizer ». Tristesse!</p>
+<p>Cela se corse lorsque l’on veut tester unitairement la conversion du retour de « Google Maps » en objet. Se baser sur une ressource externe pour vos tests unitaires (que ce soit celui de Google ou un autre prestataire) peut renvoyer des résultats aléatoires. Il faut donc « mocker » l’appel, mais c’est impossible ici car tout est dans une méthode privée. La seule solution est de diviser la classe en deux :</p>
+<ul>
+<li>Une classe « GoogleMap » qui va chercher les informations d’une adresse donnée, pour les renvoyer au format « json ».</li>
+<li>Pourquoi pas une méthode statique « createFromGoogleMap » dans la classe « JolieAdresse » qui reçoit un objet de type « GoogleMap »</li>
+</ul>
+<p>Notez que, grâce à ce refactoring, la classe « GoogleMap » peut être réutilisée dans un autre projet, sans aucun problème. Le maître mot, selon moi, pour le principe de « Single Responsibility » est la <span style="text-decoration: underline;"><strong>réutilisabilité</strong></span>. Chaque classe ou ensemble de classes, pourrait être vu comme un plugin.</p>
+<p>N’hésitez pas à refactorer votre code avant qu’il ne soit trop tard. En effet, une classe qui a 2 responsabilités est parfois synonyme de « porte ouverte » : On se dit « si elle peut gérer l’html, on peut y ajouter la gestion du cache » et « si elle gère le cache, on peut y ajouter l’enregistrement dans Memcached ou en base de données? », etc. Les responsabilités s’accumulent et vous voilà coincé avec une classe qui fait le café et qui a peut-être un constructeur avec beaucoup trop d’arguments.</p>
+<h2>Choisir Bonux</h2>
+<p>Je terminerai par un diction de Maité qui est aussi valable pour tous les principes que nous allons voir: c’est une question de bon sens. Il est parfois (mais il faut pouvoir le justifier) préférable de vivre avec une classe qui a deux responsabilités, plutôt que deux classes qui n’en n’ont qu’une. L’exemple de la classe « Modem » est assez connu:</p>
+<p style="text-align: center;"><img class="article-img" alt="" src="http://yuml.me/diagram/scruffy/class/%5BModem|+connecte%28numeroTel%29;+deconnect%28%29;+envoi%28string%29;+recoit%28%29%5D" width="259" height="131"/></p>
+<p>On voit clairement que cette classe a deux responsabilités : La gestion de la connexion d&rsquo;une part et la gestion des messages de l&rsquo;autre. Cependant, faut-il les séparer ? Vous n’allez pas aimer la réponse, mais cela dépend du contexte. Je vous propose de voir ce qu’en dit Uncle Bob, <a href="https://docs.google.com/open?id=0ByOwmqah_nuGNHEtcU5OekdDMkk" class="external external_icon" target="_blank">dans son livre dont voici l&rsquo;extrait (page 112)</a>.</p>
+<p>C&rsquo;est un peu un cas à part, surtout qu&rsquo;il parle de compilation qui ne nous intéresse que très peu en PHP. Cependant, il est intéressant de voir que même la compilation peut influencer la stratégie à avoir pour coder vos classes&#8230; Vous auriez fait quoi vous? Une ou deux classes?</p>
+</article>
+
+<footer>
+  <p>Originally published on <strong>Le méchant blog</strong> &mdash; <a href="../">from0</a></p>
+</footer>
+
+</body>
+</html>

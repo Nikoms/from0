@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Selenium webdriver: Le click droit — Le méchant blog</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --text: #1a1a2e;
+    --accent: #4361ee;
+    --accent2: #3a0ca3;
+    --radius: 8px;
+    --code-bg: #1e1e2e;
+    --code-text: #cdd6f4;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.7; min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #fff; padding: 40px 20px 32px;
+  }
+  header nav { max-width: 780px; margin: 0 auto; }
+  header nav a {
+    color: #f59e0b; text-decoration: none; font-size: .9em; font-weight: 600;
+  }
+  header nav a:hover { color: #fbbf24; }
+  article {
+    max-width: 780px; margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  article h1 {
+    font-size: 2em; color: var(--accent2); margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .meta {
+    color: #666; font-size: .9em; margin-bottom: 32px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .tag {
+    display: inline-block; padding: 2px 10px;
+    border-radius: 12px; font-size: .8em; font-weight: 600;
+    background: #e8f4fd; color: #1a73e8;
+  }
+  article h2 {
+    font-size: 1.4em; margin: 32px 0 12px; color: var(--accent2);
+    border-bottom: 2px solid #e8e8e8; padding-bottom: 4px;
+  }
+  article h3 { font-size: 1.15em; margin: 24px 0 8px; }
+  article p { margin-bottom: 16px; }
+  article ul, article ol { margin: 0 0 16px 24px; }
+  article li { margin-bottom: 6px; }
+  article a { color: var(--accent); }
+  article img, article .article-img {
+    max-width: 100%; height: auto; border-radius: var(--radius);
+    margin: 8px 0;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 16px 20px; border-radius: var(--radius);
+    overflow-x: auto; margin: 16px 0 20px;
+    font-size: .88em; line-height: 1.5;
+  }
+  code {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+  :not(pre) > code {
+    background: #e8e8ee; padding: 2px 6px;
+    border-radius: 4px; font-size: .9em;
+  }
+  blockquote {
+    border-left: 4px solid var(--accent);
+    padding: 12px 16px; margin: 16px 0;
+    background: #f0f0ff; border-radius: 0 var(--radius) var(--radius) 0;
+    color: #444; font-style: italic;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 16px 0;
+  }
+  th, td {
+    padding: 8px 12px; text-align: left;
+    border-bottom: 1px solid #e0e0e0; font-size: .9em;
+  }
+  th { background: #f0f0f5; font-weight: 600; }
+  footer {
+    text-align: center; padding: 32px 20px;
+    font-size: .85em; color: #888;
+  }
+  footer a { color: var(--accent); }
+  @media (max-width: 600px) {
+    article h1 { font-size: 1.5em; }
+    article { padding: 24px 16px 60px; }
+    pre { font-size: .8em; padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <nav><a href="../">&larr; from0</a></nav>
+</header>
+
+<article>
+  <h1>Selenium webdriver: Le click droit</h1>
+  <div class="meta">
+    <span class="tag">Testing</span>
+    <time datetime="2017-01-30">30 janvier 2017</time>
+  </div>
+
+  <p>Voici un mini article pour vous montrer comment faire un <strong>click droit</strong> dans <strong>Selenium webdriver</strong>. Contrairement au click « standard », cette action n&rsquo;est pas prévue de base. Si vous avez affaire à une interface web avec de <em>faux</em> menus contextuels, il faut bien trouver un moyen pour passer outre les limitations du driver!</p>
+<p>Heureusement, le javascript permet de simuler le click droit et double-heureusement, <em>Webdriver</em> nous permet d&rsquo;exécuter du javascript.</p>
+<p>Voici une méthode pour « cliquer droit » sur un élément via un sélecteur CSS. Dans l&rsquo;exemple, <em>jQuery</em> est utilisé pour sélectionner l’élément, mais libre à vous d&rsquo;utiliser du « pur javascript » s&rsquo;il n&rsquo;est pas disponible sur votre site.</p><pre><code>//Création d'une classe custom qui pourra contenir d'autres méthodes utiles
+class MySelenium2Extended extend \PHPUnit_Extensions_Selenium2TestCase{ 
+
+    public function rightClick($cssSelector)
+    {
+        $javascript = '
+        return (function($,cssSelector){
+            var $element = $(cssSelector);
+            var element = $element.get(0); //On prend le premier élément
+            var evt = element.ownerDocument.createEvent(&quot;MouseEvents&quot;);
+            var RIGHT_CLICK = 2;
+
+            var elementPosition = $element.position();
+
+            evt.initMouseEvent(
+               &quot;contextmenu&quot;
+               ,true
+               ,true
+               , window
+               ,1
+               ,500                       // event s screen x coordinate
+               ,500                       // event s screen y coordinate
+               ,elementPosition.left    // event s client x coordinate
+               ,elementPosition.top     // event s client y coordinate
+               ,false
+               ,false
+               ,false
+               ,false
+               ,RIGHT_CLICK 
+               ,null
+            );
+
+            if (document.createEventObject){ //Pour IE
+               return element.fireEvent(&quot;onclick&quot;, evt)
+             }
+            else{ //Pour les autres
+              return !element.dispatchEvent(evt);
+            }
+        })(jQuery,\''.$cssSelector.'\');';
+
+        $this-&gt;execute(array('script' =&gt; $javascript, 'args' =&gt; array()));
+    }
+}</code></pre>
+<p>Il ne vous reste plus qu&rsquo;à étendre la nouvelle classe <em>MySelenium2Extended </em>plutôt que <em>PHPUnit_Extensions_Selenium2TestCase</em> pour avoir accès à la méthode.</p>
+<p>Voici un exemple de code à l&rsquo;usage:</p><pre><code>class InterfaceTest extend MySelenium2Extended{
+
+  public function testContextMenu()
+  {
+    //Ouvre le menu contextuel lié à l'icone &quot;manage&quot; dans la toolbar 
+    $this-&gt;rightClick('#toolbar .manage'); 
+
+    //Click sur le lien dans le menu contextuel
+    $this-&gt;click($this-&gt;byClassName('add_page')); 
+
+    //Etc...Le formulaire s'affiche et on peut donc travailler dessus
+  }
+
+}</code></pre>
+<p>Bons tests!</p>
+</article>
+
+<footer>
+  <p>Originally published on <strong>Le méchant blog</strong> &mdash; <a href="../">from0</a></p>
+</footer>
+
+</body>
+</html>

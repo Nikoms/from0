@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solid – D : Dependency inversion — Le méchant blog</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --text: #1a1a2e;
+    --accent: #4361ee;
+    --accent2: #3a0ca3;
+    --radius: 8px;
+    --code-bg: #1e1e2e;
+    --code-text: #cdd6f4;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.7; min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #fff; padding: 40px 20px 32px;
+  }
+  header nav { max-width: 780px; margin: 0 auto; }
+  header nav a {
+    color: #f59e0b; text-decoration: none; font-size: .9em; font-weight: 600;
+  }
+  header nav a:hover { color: #fbbf24; }
+  article {
+    max-width: 780px; margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  article h1 {
+    font-size: 2em; color: var(--accent2); margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .meta {
+    color: #666; font-size: .9em; margin-bottom: 32px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .tag {
+    display: inline-block; padding: 2px 10px;
+    border-radius: 12px; font-size: .8em; font-weight: 600;
+    background: #e8f4fd; color: #1a73e8;
+  }
+  article h2 {
+    font-size: 1.4em; margin: 32px 0 12px; color: var(--accent2);
+    border-bottom: 2px solid #e8e8e8; padding-bottom: 4px;
+  }
+  article h3 { font-size: 1.15em; margin: 24px 0 8px; }
+  article p { margin-bottom: 16px; }
+  article ul, article ol { margin: 0 0 16px 24px; }
+  article li { margin-bottom: 6px; }
+  article a { color: var(--accent); }
+  article img, article .article-img {
+    max-width: 100%; height: auto; border-radius: var(--radius);
+    margin: 8px 0;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 16px 20px; border-radius: var(--radius);
+    overflow-x: auto; margin: 16px 0 20px;
+    font-size: .88em; line-height: 1.5;
+  }
+  code {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+  :not(pre) > code {
+    background: #e8e8ee; padding: 2px 6px;
+    border-radius: 4px; font-size: .9em;
+  }
+  blockquote {
+    border-left: 4px solid var(--accent);
+    padding: 12px 16px; margin: 16px 0;
+    background: #f0f0ff; border-radius: 0 var(--radius) var(--radius) 0;
+    color: #444; font-style: italic;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 16px 0;
+  }
+  th, td {
+    padding: 8px 12px; text-align: left;
+    border-bottom: 1px solid #e0e0e0; font-size: .9em;
+  }
+  th { background: #f0f0f5; font-weight: 600; }
+  footer {
+    text-align: center; padding: 32px 20px;
+    font-size: .85em; color: #888;
+  }
+  footer a { color: var(--accent); }
+  @media (max-width: 600px) {
+    article h1 { font-size: 1.5em; }
+    article { padding: 24px 16px 60px; }
+    pre { font-size: .8em; padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <nav><a href="../">&larr; from0</a></nav>
+</header>
+
+<article>
+  <h1>Solid – D : Dependency inversion</h1>
+  <div class="meta">
+    <span class="tag">SOLID</span>
+    <time datetime="2014-05-06">6 mai 2014</time>
+  </div>
+
+  <p>Voici venu le temps des rires, des chants et du dernier article concernant les principes « SOLID », j’ai nommé: la « dependency inversion» ou, pour les anglophobes, l’inversion de dépendance.</p>
+<p>À ne pas confondre avec l&rsquo;<strong>injection</strong> de dépendance, même si on n&rsquo;en est « pas loin », nous verrons pourquoi. Pour comprendre le principe voyons d&rsquo;abord ce qu&rsquo;est réellement une dépendance.</p>
+<h2>Team spirit!</h2>
+<p>&nbsp;</p>
+<p>Prenons comme exemple deux équipes de programmeurs qui travaillent sur le même projet.</p>
+<ul>
+<li>L&rsquo;équipe A s&rsquo;occupe de créer une classe <em>SmtpMailer</em>,  qui va envoyer un e-mail via SMTP. Une classe d&rsquo;assez bas niveau donc.</li>
+<li>L&rsquo;équipe B s&rsquo;occupe de créer une classe <em>PromoSender</em> qui va récupérer la dernière promotion et va l&rsquo;envoyer par e-mail via <em>SmtpMailer</em>.<em></em></li>
+</ul>
+<p>Pour faciliter la lecture, je vais simplifier le code au maximum.</p><pre><code>namespace EquipeA\Mailer;
+
+class SmtpMailer
+{ 
+  //...
+
+  public function setTo($to)
+  { 
+    $this-&gt;to = $to; 
+  } 
+
+  public function setBody($body) 
+  { 
+    $this-&gt;body = $body; 
+  } 
+
+  public function send() 
+  {
+    mail($this-&gt;to, 'Dernière promo!', $this-&gt;body);
+  } 
+
+  //Et plein d'autres méthodes...
+}</code></pre>
+<p>La classe de la deuxième équipe <strong>utilise</strong> la classe « Mailer » et donc en <strong>dépend</strong>. En effet, si un jour on remplace la classe « SmtpMailer », il y a fort à parier que le code de la seconde équipe devra aussi changer.</p><pre><code>namespace EquipeB\Sender;
+
+class PromoSender
+{
+  public function __construct(\EquipeA\Mailer\SmtpMailer $mailer)
+  {
+    $this-&gt;mailer = $mailer;
+  }
+
+  public function sendto($email, $body)
+  {
+    $this-&gt;mailer-&gt;setTo($email);
+    $this-&gt;mailer-&gt;setBody($body);
+    $this-&gt;mailer-&gt;send();
+  }
+
+}</code></pre>
+<p>Voici le code à l&rsquo;utilisation:</p><pre><code>$mailer = new \EquipeA\Mailer\SmtpMailer();
+$sender = new \EquipeB\Sender\PromoSender($mailer);
+
+$sender-&gt;sendTo('gofor@spam.com', 'Bonjour, vous avez droit à -50%!');
+//etc...</code></pre>
+<p>Le lecteur averti que vous êtes, remarquera que nous avons utilisé le principe d&rsquo;<strong>injection de dépendance</strong> pour « donner » <em>SmtpMailer</em> à <em>PromoSender</em>. Nous parlons bien d&rsquo;<strong>injection</strong> et pas encore d&rsquo;<strong>inversion</strong>.</p>
+<p>En Uml, cela donnerait ceci:</p>
+<p style="text-align: center;"><img class="article-img" alt="UserLog uses User" src="http://yuml.me/diagram/class/%5BPromoSender%5Duses%20-.-%3E%5BSmtpMailer%5D" width="437" height="72"/></p>
+<p>Remarquez la direction de la flèche qui va <strong>vers</strong> <em>SmtpMailer</em>. La classe Promo<em>Sender</em> ne peut pas vivre sans cette dernière car elle l&rsquo;utilise (ou en dépend si vous préférez). Donc si vous voulez envoyer un e-mail avec une autre classe que <em>SmtpMailer</em>, vous êtes cuit! A moins que&#8230;<em></em></p>
+<h2></h2>
+<h2>Première étape: l&rsquo;abstraction</h2>
+<p>&nbsp;</p>
+<p>Tout d&rsquo;abord, voyons ces 2 classes comme faisant partie de 2 packages différents. Je rajoute les couleurs au diagramme pour vous simplifier la vie.</p>
+<p style="text-align: center;"><img class="article-img" alt="PromoSender uses SmtpMailer" src="http://yuml.me/diagram/class/%5BPromoSender%7Bbg:orange%7D%5Duses%20-.-%3E%5BSmtpMailer%7Bbg:green%7D%5D" width="437" height="72"/></p>
+<p style="text-align: center;">En vert: Equipe A<br/>
+En orange: Equipe B</p>
+<p>Pour faire une « inversion » (et accessoirement bien faire les choses), nous utilisons une interface. L&rsquo;équipe B se charge simplement d&rsquo;extraire les méthodes publiques dans une interface qu&rsquo;ils nomment <em>MailerInterface</em>. Le <em>Sender</em> va alors utiliser l&rsquo;interface <em>MailerInterface</em> plutôt que la classe concrète: C&rsquo;est une bonne chose!<em></em></p>
+<p style="text-align: center;"><img class="article-img" alt="" src="http://yuml.me/diagram/class/%5BMailerInterface%5D%5E-.-%5BSmtpMailer%7Bbg:green%7D%5D,%5BPromoSender%7Bbg:orange%7D%5Duses%20-.-%3E%5BMailerInterface%7Bbg:green%7D%5D" width="600"/></p>
+<p style="text-align: center;">En vert: Equipe A<br/>
+En orange: Equipe B</p>
+<p>Notez une chose intéressante à propos de la dépendance par rapport à <em>SmtpMailer</em>: Nous l&rsquo;avons <strong>inversé </strong>(Le mot est lâché) ! À présent une flèche part <strong><span style="text-decoration: underline;">de</span> </strong>(et non plus <strong>vers</strong>)<strong> </strong><em>SmtpMailer</em>. Les deux classes se rejoignent sur<em> MailerInterface</em>.</p>
+<p>Dans le code, vous vous doutez bien que c&rsquo;est tout simple. L&rsquo;équipe A crée l&rsquo;interface, et l&rsquo;implémente:</p><pre><code>namespace EquipeA\Mailer;
+
+interface MailerInterface
+{
+  public function setTo($to);
+  public function setBody($body);
+  public function send();
+  public function addHeader();
+  public function removeHeader();
+  public function setHtml();
+  //etc...
+}
+
+class SmtpMailer implements MailerInterface
+{ 
+  //Implémente toutes les méthodes de MailerInterface
+}</code></pre>
+<p>Et pour l&rsquo;équipe B, il suffit d&rsquo;indiquer l&rsquo;interface plutôt que la classe concrète dans le typage de la méthode:</p><pre><code>namespace EquipeB\Sender;
+
+class PromoSender
+{
+  public function __construct(\EquipeA\Mailer\MailerInterface $mailer)
+  {
+    //code...
+  }
+}</code></pre>
+<p>L&rsquo;essentiel est de <strong>ne pas dépendre de l&rsquo;implémentation, mais d&rsquo;une abstraction</strong>. Grâce à cela, l&rsquo;implémentation (la classe <em>SmtpMailer</em>) peut être remplacée si votre projet évolue. Libre à vous de créer des <em>ImapMailer</em>, <em>GmailMailer</em>, SimulatorMailer etc&#8230; tant que ceux-ci implémentent l&rsquo;interface <em>MailerInterface</em>. Au final, peu importe votre type d&rsquo;envoi, le code ne bougera pas:</p><pre><code>//Premier exemple
+$mailer = new \EquipeA\Mailer\SmtpMailer();
+$sender = new \EquipeB\Sender\PromoSender($mailer);
+$sender-&gt;sendTo('gofor@spam.com', 'Envoyé par smtp');
+
+//Ou alors, on peut envoyer le e-mail via Imap si la config nous l'indique...
+$mailer = new \EquipeA\Mailer\ImapMailer();
+$sender = new \EquipeB\Sender\PromoSender($mailer);
+$sender-&gt;sendTo('gofor@spam.com', 'Envoyé par imap');
+
+//On peut même faire semblant d'envoyer un e-mail en passant par un simulateur d'envoi
+$mailer = new \EquipeA\Mailer\SimulatorMailer();
+$sender = new \EquipeB\Sender\PromoSender($mailer);
+$sender-&gt;sendTo('gofor@spam.com', 'Ce message sera logé. Pratique pour les tests!');</code></pre>
+<p>C&rsquo;est réutilisable et en plus ca répond au principe de l&rsquo;<a title="SOLID – O: Open/Closed" href="http://www.mechantblog.com/2013/12/solid-o-open-closed/">O &#8211; Open/closed</a>!</p>
+<p>Voilà <strong>LA</strong> grande étape de l&rsquo;inversion de dépendance. Pour résumer <span style="text-decoration: underline;">grossièrement</span>: il faut utiliser des interfaces. Cependant, il y a deux choses qui ne semblent pas nettes.</p>
+<ul>
+<li>Tout d&rsquo;abord, lors du chapitre <a title="SOLID – I: Interface Segregation" href="http://www.mechantblog.com/2014/02/solid-i-interface-segregation/">I &#8211; Interface Segregation</a>, nous avons vu qu&rsquo;une méthode/classe ne devait recevoir que ce dont elle avait besoin, ni plus ni moins. Or, <em>PromoSender</em> n&rsquo;utilise pas le quart de ce que propose <em>MailerInterface</em>.</li>
+<li>Ensuite, pour bien faire, les 2 modules devraient pouvoir être utilisables séparément. Si c&rsquo;est bien le cas pour le package du « Mailer », c&rsquo;est nettement moins vrai pour <em>PromoSender </em>qui reste dépendant de l&rsquo;interface d&rsquo;un autre package.</li>
+</ul>
+<p>Voici peut-être venu le moment idéal pour lire la définition exacte du principe d&rsquo;inversion de dépendance. Que dit <a title="Uncle Bob" href="http://www.8thlight.com/team/uncle-bob" class="external external_icon" target="_blank">Bob Martin</a> (aka Uncle Bob) à ce sujet?</p>
+<h2></h2>
+<h2>Bob a dit&#8230;</h2>
+<p>&nbsp;</p>
+<blockquote>
+<p style="text-align: center;">High-level modules should not depend on low-level modules. Both should depend on abstractions.<br/>
+Abstractions should not depend upon details. Details should depend upon abstractions.</p>
+</blockquote>
+<p>&nbsp;</p>
+<p>En français, cela donne:</p>
+<p>&nbsp;</p>
+<blockquote>
+<p style="text-align: center;">Les modules de haut niveau ne devraient pas dépendre des modules de bas niveau. Les 2 devraient dépendre d&rsquo;abstraction.<br/>
+Les abstractions ne devraient pas dépendre de détails (=de l&rsquo;implémentation). Les détails (=implémentations) devraient dépendre d&rsquo;abstractions.</p>
+</blockquote>
+<p>&nbsp;</p>
+<p>En gros, Bob nous dit qu&rsquo;il va falloir revoir notre copie. Et ce, pour deux raisons:</p>
+<ul>
+<li>Le module de haut niveau (<em>PromoSender</em>) dépend directement d&rsquo;un module de bas niveau (<em>MailerInterface</em>).</li>
+<li><em>PromoSender</em> n&rsquo;a pas sa propre abstraction. Elle utilise une interface d&rsquo;un autre module et est donc dépendante de l&rsquo; « implémentation » de <em>MailerInterface</em>. En effet, si les méthodes de cette dernière changent, <em>PromoSender</em> doit changer également. On a vu mieux au niveau du « couplage ».</li>
+</ul>
+<h1 id="watch-headline-title">Chacun chez soi et les hippopotames seront bien gardés</h1>
+<p>&nbsp;</p>
+<p>Comment fait-on pour régler ces problèmes? Commençons par le plus simple: Demandons à l&rsquo;équipe B (aka l&rsquo;équipe des losers sans interface), de bien vouloir créer une interface que va utiliser <em>PromoSender</em> dans son constructeur. Cela afin de ne plus être dépendant de <em>MailerInterface</em>. On en profitera pour faire des méthodes qui nous « arrangent ».</p><pre><code>namespace EquipeB\Sender;
+
+//La nouvelle interface, très sobre
+interface PromoSenderTransportInterface
+{
+  public function setMessageTo($message, $email);
+}
+
+class PromoSender
+{
+  public function __construct(PromoSenderTransportInterface $transport)
+  {
+    $this-&gt;transport= $transport;
+  }
+
+  public function sendTo($email, $body)
+  {
+    $this-&gt;transport-&gt;setMessageTo($body, $email); 
+  } 
+}</code></pre>
+<p>Et en UML, cela donne:</p>
+<p style="text-align: center;"><img class="article-img" alt="" src="http://yuml.me/diagram/class/%5BMailerInterface%7Bbg:green%7D%5D%5E-.-%5BSmtpMailer%7Bbg:green%7D%5D,%5BPromoSender%7Bbg:orange%7D%5Duses%20-.-%3E%5BPromoSenderTransportInterface%7Bbg:orange%7D%5D" width="637" height="157"/></p>
+<p>Les 2 modules sont maintenant indépendants, les interfaces sont bien définies (et différentes), les tests unitaires sont probablement encore plus simples (on ne mock que le nécessaire, comme on a dit lors du <a title="SOLID – I: Interface Segregation" href="http://www.mechantblog.com/2014/02/solid-i-interface-segregation/">I-Interface Segregation</a>)&#8230; Mais une chose saute aux yeux: ils sont tellement indépendants qu&rsquo;ils ne savent plus communiquer ensemble! Nous avons, comme qui dirait, un problème 🙂</p>
+<p>Il existe une solution pour faire communiquer 2 modules qui « ne parlent pas la même langue ». Cette solution, nous l&rsquo;avons déjà vue lors d&rsquo;un précédent article, c&rsquo;est bien sûr, le <em><strong>pattern Adapter</strong></em>. Encore lui! Décidément, il est partout. On le voit  d&rsquo;ailleurs de plus en plus. Surtout dans des projets comme Symfony, Laravel où tout (ou presque) est modulable, externalisable voire même réutilisable en standalone (twig, swiftmailer, oAuth, etc&#8230;).</p>
+<p>Le but du jeu est de pouvoir utiliser un objet « MyAdapter » comme s&rsquo;il était un <em>PromoSenderTransportInterface</em>, et qu&rsquo;il envoie un mail via le <em>MailerInterface </em>choisi.</p>
+<p>Ça peut paraitre compliqué, mais ça ne l&rsquo;est pas. Voici son code où il fait vraiment office de passerelle entre les 2 modules en implémentant une interface et en utilisant l&rsquo;autre.</p><pre><code>//Implémentation de l'interface du sender
+class MyAdapter implements \EquipeB\Sender\PromoSenderTransportInterface
+{
+  //On utilisera le mailer plus tard...
+  public function __construct(\EquipeA\Mailer\MailerInterface $mailerInterface)
+  {
+    $this-&gt;mailer = $mailerInterface;
+  }
+
+  //Implémentation de la méthode de l'interface de l'équipe B
+  public function setMessageTo($message, $to)
+  {
+    //Utilisation du mailer de l'équipe A
+    $this-&gt;mailer-&gt;setTo($email);
+    $this-&gt;mailer-&gt;setBody($body);
+    $this-&gt;mailer-&gt;send();
+  }
+}</code></pre>
+<p>A l&rsquo;utilisation, voici ce que ça donne avec une comparaison avant/après:</p><pre><code>//Avant, nous avions cela:
+$mailer = new \EquipeA\Mailer\SmtpMailer();
+$sender = new \EquipeB\Sender\PromoSender($mailer);
+$sender-&gt;sendTo('gofor@spam.com', 'Envoyé par smtp');
+
+//Avec un adaptateur, nous avons ceci:
+$mailerAdapter = new MyAdapter(new \EquipeA\Mailer\SmtpMailer());
+$promoSender = new \EquipeB\Sender\PromoSender($mailerAdapter);
+$sender-&gt;sendTo('gofor@spam.com', 'Envoyé par smtp');</code></pre>
+<p>&nbsp;</p>
+<p>Voilà à quoi cela va ressembler en UML. Vous remarquerez que les flèches partent de <em>MyAdapter</em>, les 2 modules ne se connaissent toujours pas:</p>
+<p style="text-align: center;"><img class="article-img" alt="" src="http://yuml.me/diagram/class/%5BMailerInterface%7Bbg:green%7D%5D%5E-.-%5BSmtpMailer%7Bbg:green%7D%5D,%5BPromoSender%7Bbg:orange%7D%5Duses%20-.-%3E%5BPromoSenderTransportInterface%7Bbg:orange%7D%5D%5E-.-,%5BPromoSenderTransportInterface%5D%5E-.-%5BMyAdapter%7Bbg:grey%7D%5D,%5BMyAdapter%5Duses%20-.-%3E%5BMailerInterface%5D" width="341" height="797"/></p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<p>Comme vous pouvez le voir, l&rsquo;adaptateur ne fait partie d&rsquo;aucun des 2 modules. Cependant, il faut bien le mettre quelque part, mais où?</p>
+<ul>
+<li>Au mieux, il sera créé dans un package à part: celui de votre projet.</li>
+<li>Au pire, s&rsquo;il faut vraiment choisir un des deux modules, il pourra être implémenté dans le package <em>où se trouve PromoSenderInterface</em>. En effet, celui-ci est de plus haut niveau, ce qui lui permet de plus facilement « anticiper » ce qu&rsquo;il va utiliser.</li>
+<li>Par contre, <em>MailerInterface</em> est de très bas niveau, et ne peut pas anticiper tous les autres modules qui vont l&rsquo;utiliser.</li>
+</ul>
+<h2>L&rsquo;heure du bilan</h2>
+<p>Aujourd&rsquo;hui, nous avons vu qu&rsquo;il était important de bien séparer l&rsquo;abstraction et l&rsquo;implémentation.</p>
+<p>Tout d&rsquo;abord, parce que l&rsquo;abstraction a beaucoup moins susceptible d&rsquo;être modifiée que l&rsquo;implémentation. Le code change beaucoup, que ce soit en « change » ou en « bug », mais les interfaces changent très peu.</p>
+<p>Ensuite, parce cela vous donne une certaine flexibilité quant à l&rsquo;objet que vous pourrez donner à vos méthodes. Si vous n&rsquo;utilisez pas d&rsquo;interface, vous basculerez vite dans l&rsquo;héritage « insensé » du style <em>ImapMailer</em> qui étend <em>SmtpMailer </em>qui lui même étend <em>GmailMailer</em>. Sur ce point de vue là, c&rsquo;est <a title="SOLID – L: Liskov substitution" href="http://www.mechantblog.com/2013/12/solid-l-liskov-substitution/">Liskov</a> qui ne sera pas contente.</p>
+<p>Séparer abstraction et implémentation, oui, mais pas seulement. En effet, nous avons vu que nous pouvions aussi séparer le code en 2 packages complètement indépendants (ce qui nous rappelle le premier fondement SOLID: <a title="SOLID – S: Single Responsibility" href="http://www.mechantblog.com/2013/12/solid-single-responsability/">S: Single Responsibility)</a>. Deux packages différents, rime avec ré-utilisabilité, testabilité, maintenabilité, et plein d&rsquo;autres choses qui terminent pas « ité », mais aussi plus de cohésion, moins de couplage et donc probablement moins de bugs. On sait également qu&rsquo;au moins il y a de code, au moins vous rencontrerez de problèmes.</p>
+<p>Nous avons vu, encore une fois, la magie de l&rsquo;adaptateur. Celui-ci n&rsquo;a pas que des avantages, car il peut aussi complexifier les choses, mais il a le mérite de coller des morceaux entre eux. Certes, si une de nos interfaces venait à être modifiée, il faudra changer l&rsquo;adaptateur ainsi que ses 2-3 tests unitaires, soit! Mais c&rsquo;est tout de même mieux que de revoir tout le code de votre package, et tous les malheureux projets qui l&rsquo;utilisent. Sans parler des tests unitaires qui ne passent plus car plus aucun de vos « mocks » ne sont corrects. Ça fait beaucoup de boulot, vous ne trouvez pas?</p>
+<p>Même si cet article n&rsquo;est pas là pour faire l&rsquo;apologie de l&rsquo;adaptateur, sachez qu&rsquo;il est tout autour de vous, mais qu&rsquo;il ne s&rsquo;appelle pas forcément <em>Adapter</em> partout. Voici un simple exemple de comment font les gens pour utiliser <a href="http://www.smarty.net/" class="external external_icon" target="_blank"><em>Smarty</em></a> à la place de <a href="http://twig.sensiolabs.org/" class="external external_icon" target="_blank"><em>Twig</em></a> dans <em>Symfony</em>: via <em><a href="https://github.com/noiselabs/SmartyBundle/blob/master/SmartyEngine.php" class="external external_icon" target="_blank">EngineInterface</a></em>. Vous verrez que la manière de procéder est exactement la même: On crée une classe qui étend une interface (<em>EngineInterface</em><em></em>) qui va utiliser un objet d&rsquo;un autre module (<em>Smarty </em><em></em>), et le tour est joué! Bien évidemment, <em>Smarty</em> et <em>Symfony</em> continuent d&rsquo;évoluer indépendamment.</p>
+<h2>SOLID: Fin</h2>
+<p>Voilà pour le dernier article de SOLID. J&rsquo;espère que tout cela vous a plu.</p>
+<p>Comme vous avez pu le constater, les principes se chevauchent un peu les uns les autres. Au final, en suivant ces quelques règles, il est difficile de dévier de la trajectoire de « bon développeur ».</p>
+<p>Cependant, comme dit <a href="https://www.youtube.com/watch?v=vxe-pdBULcY" class="external external_icon" target="_blank">Ribery</a>: « SOLID, c&rsquo;est une boite à outils qu&rsquo;elle est bien de connaitre et de se rappeler ». Il ne s&rsquo;agit donc pas là d&rsquo;une vérité absolue. Je ne pense pas qu&rsquo;un projet puisse être SOLID à 100%. Il ne faut pas tomber dans l&rsquo;extrême où il existe une interface pour chaque signature de méthode. De même que chaque classe ne doit pas forcément avoir son interface. A l&rsquo;époque, j&rsquo;étais tombé sur <a href="https://github.com/fabpot/Pimple/issues/52" class="external external_icon" target="_blank">ce ticket à propos de Pimple</a> où <em>Fabien Potencier</em> disait:</p>
+<blockquote><p>Using an interface does not really make sense to me as I don&rsquo;t see what kind of other implementation you might have.</p></blockquote>
+<p>Ça se tient! Quand savoir s&rsquo;il faut une interface ou pas? Sans doute une question de feeling et d&rsquo;expérience. L&rsquo;exemple de l&rsquo; <a title="SOLID – O: Open/Closed" href="http://www.mechantblog.com/2013/12/solid-o-open-closed/">O: Open/Closed</a> l&rsquo;a bien montré: Le code, ça peut aussi se refactorer. Qui ne l&rsquo;a jamais fait? Cela fait aussi partie de notre quotidien, et c&rsquo;est comme ça que l&rsquo;on apprend. C&rsquo;est beau&#8230;</p>
+</article>
+
+<footer>
+  <p>Originally published on <strong>Le méchant blog</strong> &mdash; <a href="../">from0</a></p>
+</footer>
+
+</body>
+</html>

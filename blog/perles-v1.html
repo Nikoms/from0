@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Les perles de code: volume 1 — Le méchant blog</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --text: #1a1a2e;
+    --accent: #4361ee;
+    --accent2: #3a0ca3;
+    --radius: 8px;
+    --code-bg: #1e1e2e;
+    --code-text: #cdd6f4;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.7; min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #fff; padding: 40px 20px 32px;
+  }
+  header nav { max-width: 780px; margin: 0 auto; }
+  header nav a {
+    color: #f59e0b; text-decoration: none; font-size: .9em; font-weight: 600;
+  }
+  header nav a:hover { color: #fbbf24; }
+  article {
+    max-width: 780px; margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  article h1 {
+    font-size: 2em; color: var(--accent2); margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .meta {
+    color: #666; font-size: .9em; margin-bottom: 32px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .tag {
+    display: inline-block; padding: 2px 10px;
+    border-radius: 12px; font-size: .8em; font-weight: 600;
+    background: #e8f4fd; color: #1a73e8;
+  }
+  article h2 {
+    font-size: 1.4em; margin: 32px 0 12px; color: var(--accent2);
+    border-bottom: 2px solid #e8e8e8; padding-bottom: 4px;
+  }
+  article h3 { font-size: 1.15em; margin: 24px 0 8px; }
+  article p { margin-bottom: 16px; }
+  article ul, article ol { margin: 0 0 16px 24px; }
+  article li { margin-bottom: 6px; }
+  article a { color: var(--accent); }
+  article img, article .article-img {
+    max-width: 100%; height: auto; border-radius: var(--radius);
+    margin: 8px 0;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 16px 20px; border-radius: var(--radius);
+    overflow-x: auto; margin: 16px 0 20px;
+    font-size: .88em; line-height: 1.5;
+  }
+  code {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+  :not(pre) > code {
+    background: #e8e8ee; padding: 2px 6px;
+    border-radius: 4px; font-size: .9em;
+  }
+  blockquote {
+    border-left: 4px solid var(--accent);
+    padding: 12px 16px; margin: 16px 0;
+    background: #f0f0ff; border-radius: 0 var(--radius) var(--radius) 0;
+    color: #444; font-style: italic;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 16px 0;
+  }
+  th, td {
+    padding: 8px 12px; text-align: left;
+    border-bottom: 1px solid #e0e0e0; font-size: .9em;
+  }
+  th { background: #f0f0f5; font-weight: 600; }
+  footer {
+    text-align: center; padding: 32px 20px;
+    font-size: .85em; color: #888;
+  }
+  footer a { color: var(--accent); }
+  @media (max-width: 600px) {
+    article h1 { font-size: 1.5em; }
+    article { padding: 24px 16px 60px; }
+    pre { font-size: .8em; padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <nav><a href="../">&larr; from0</a></nav>
+</header>
+
+<article>
+  <h1>Les perles de code: volume 1</h1>
+  <div class="meta">
+    <span class="tag">Perles</span>
+    <time datetime="2013-08-28">28 août 2013</time>
+  </div>
+
+  <p>L&rsquo;heure est venue de reprendre un peu ce blog en main. Je n&rsquo;ai malheureusement pas eu le temps de le faire ces derniers mois, mais cette fois-ci, on ne rigole plus.</p>
+<p>Afin de reprendre « mon travail » en douceur, je vous propose quelques perles trouvées ci et là dans le code lors des mes reviews de code. Je vous en propose 2 par article&#8230; Histoire d&rsquo;en garder un peu sous le code, et aussi de vous donner une bonne raison de revenir 😉</p>
+<p>Je rappelle que tous ces codes sont issus de projets réels, je n&rsquo;ai rien inventé. Seuls les noms de variable ont été changées pour des raisons obscures.</p>
+<p>Place aux gurus du dev&#8230;. N&rsquo;oubliez pas la devise de cette rubrique: « On peut rire, mais pas se moquer »</p>
+<h2>1. Php: Le else mal aimé</h2>
+<p></p><pre><code>if (!$canChange || $canSee)
+{
+   $this-&gt;view = 'templates/template1.php';
+}
+elseif($canChange)
+{
+   $this-&gt;view = 'templates/template2.php';
+}
+else
+{
+   $this-&gt;view = 'templates/template3.php';
+}</code></pre>
+<p>Question de review: Quand arrive-t-on dans le « else » afin d&rsquo;avoir le « template3.php » ? Probablement jamais 🙂</p>
+<h2>2. Mysql : To be or not to be</h2>
+<p></p><pre><code>SELECT 
+   count(DISTINCT(id)) as cnt 
+FROM 
+   clients 
+WHERE 
+   (group_name = '12345' or group_name='') 
+   AND group_name!=''</code></pre>
+<p>Question de review: Il faut donc compter les clients qui sont dans le groupe « 12345 » ou aucun&#8230; Mais il faut exclure ceux qui ne sont dans aucun groupe. N&rsquo;est-ce pas plus simple, dès lors, de juste prendre ceux du groupe « 12345 »?</p>
+<p>&nbsp;</p>
+<p>Si vous aussi vous découvrez des perles, n&rsquo;hésitez pas à me les envoyer, je me ferai un plaisir de les diffuser sur le site.</p>
+<p>&nbsp;</p>
+</article>
+
+<footer>
+  <p>Originally published on <strong>Le méchant blog</strong> &mdash; <a href="../">from0</a></p>
+</footer>
+
+</body>
+</html>

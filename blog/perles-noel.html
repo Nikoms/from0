@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Des perles de code pour terminer l'année ! — Le méchant blog</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --text: #1a1a2e;
+    --accent: #4361ee;
+    --accent2: #3a0ca3;
+    --radius: 8px;
+    --code-bg: #1e1e2e;
+    --code-text: #cdd6f4;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.7; min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #fff; padding: 40px 20px 32px;
+  }
+  header nav { max-width: 780px; margin: 0 auto; }
+  header nav a {
+    color: #f59e0b; text-decoration: none; font-size: .9em; font-weight: 600;
+  }
+  header nav a:hover { color: #fbbf24; }
+  article {
+    max-width: 780px; margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  article h1 {
+    font-size: 2em; color: var(--accent2); margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .meta {
+    color: #666; font-size: .9em; margin-bottom: 32px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .tag {
+    display: inline-block; padding: 2px 10px;
+    border-radius: 12px; font-size: .8em; font-weight: 600;
+    background: #e8f4fd; color: #1a73e8;
+  }
+  article h2 {
+    font-size: 1.4em; margin: 32px 0 12px; color: var(--accent2);
+    border-bottom: 2px solid #e8e8e8; padding-bottom: 4px;
+  }
+  article h3 { font-size: 1.15em; margin: 24px 0 8px; }
+  article p { margin-bottom: 16px; }
+  article ul, article ol { margin: 0 0 16px 24px; }
+  article li { margin-bottom: 6px; }
+  article a { color: var(--accent); }
+  article img, article .article-img {
+    max-width: 100%; height: auto; border-radius: var(--radius);
+    margin: 8px 0;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 16px 20px; border-radius: var(--radius);
+    overflow-x: auto; margin: 16px 0 20px;
+    font-size: .88em; line-height: 1.5;
+  }
+  code {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+  :not(pre) > code {
+    background: #e8e8ee; padding: 2px 6px;
+    border-radius: 4px; font-size: .9em;
+  }
+  blockquote {
+    border-left: 4px solid var(--accent);
+    padding: 12px 16px; margin: 16px 0;
+    background: #f0f0ff; border-radius: 0 var(--radius) var(--radius) 0;
+    color: #444; font-style: italic;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 16px 0;
+  }
+  th, td {
+    padding: 8px 12px; text-align: left;
+    border-bottom: 1px solid #e0e0e0; font-size: .9em;
+  }
+  th { background: #f0f0f5; font-weight: 600; }
+  footer {
+    text-align: center; padding: 32px 20px;
+    font-size: .85em; color: #888;
+  }
+  footer a { color: var(--accent); }
+  @media (max-width: 600px) {
+    article h1 { font-size: 1.5em; }
+    article { padding: 24px 16px 60px; }
+    pre { font-size: .8em; padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <nav><a href="../">&larr; from0</a></nav>
+</header>
+
+<article>
+  <h1>Des perles de code pour terminer l'année !</h1>
+  <div class="meta">
+    <span class="tag">Perles</span>
+    <time datetime="2013-12-31">31 décembre 2013</time>
+  </div>
+
+  <p>Hello les méchants!</p>
+<p>Petite pause de début/fin d&rsquo;année pour tous. On reprendra les articles sur <em>SOLID</em> début janvier. On parlera également de designs pattern, <em>TDD</em> et aussi d&rsquo;intégration continue.</p>
+<p>Mais en attendant les « vacances », voici 3 « petites » perles (+1 gratuite) à déguster avec sagesse. Au menu:</p>
+<ul>
+<li>De l&rsquo;eval comme on les aime en amuse bouche</li>
+<li>Un commentaire qui fait froid dans le dos, comme entrée</li>
+<li>Un condition typique des juniors (désolé) comme plat</li>
+<li>Et pour le dessert, une manière bien spéciale de s&rsquo;assurer qu&rsquo;un booléen est un booléen&#8230; Enfin je crois!</li>
+</ul>
+<p>Trêve de bavardages inutiles et faisons place aux gurus!</p>
+<p>&nbsp;</p>
+<h2>1. Eval false</h2>
+<p>On commence léger avec un petit amuse-bouche en <em>javascript</em>. Je ne comprend toujours pas ce que vient faire l&rsquo;eval ici:</p><pre><code>var scrollv = eval(false);</code></pre>
+<p>&nbsp;</p>
+<h2>2. Le commentaire de la mort</h2>
+<p>Âmes sensibles s&rsquo;abstenir&#8230; Je rappelle que tout ici est authentique, c&rsquo;est difficile à croire 🙂</p><pre><code>//Todo, probablement pas optimal, probablement oubli de gestion de certain cas...</code></pre>
+<p>Le développeur ne connait pas les cas qui ne sont pas gérer. Ça nous fais une bonne jambe! Sans test unitaire, cela rend la tache encore plus difficile. Bref, pour ces cas là: vive le <em>TDD</em></p>
+<p>&nbsp;</p>
+<h2>3. La condition du noob</h2>
+<p>Je pense bien faire, je « déclare » ma variable, l&rsquo;intention y est&#8230;</p><pre><code>$canView;
+if ($condition1 &amp;&amp; $condition2 &amp;&amp; $condition3) {
+    $canView = true;
+} else
+    $canView = false;</code></pre>
+<p>On aurait peut-être pu faire plus simple:</p><pre><code>$canView = $condition1 &amp;&amp; $condition2 &amp;&amp; $condition3
+//Et pourquoi pas faire une méthode canView() si c'est possible?</code></pre>
+<p>&nbsp;</p>
+<h2> 4. Bang bang, you shoot me down</h2>
+<p>Celle-ci aussi vaut son pesant de cacahuète.</p><pre><code>return !!(tariff-&gt;getPrice(false) &lt; this-&gt;getPrice(false));</code></pre>
+<p>Je ne sais pas pourquoi ce « double bang » au début. Peut-être pour simplifier le fait de « vite changer pour voir si ça fonctionne pas dans l&rsquo;autre cas »&#8230; J&rsquo;espère au moins qu&rsquo;il n&rsquo;a pas fait ça pour s&rsquo;assurer qu&rsquo;on ai bien un booléen&#8230; Je doute, je ne sais pas, je ne sais plus, je suis perdu.</p>
+<p>&nbsp;</p>
+<h2>Bonne année!</h2>
+<p>J&rsquo;espère que tout cela ne vous a pas donné une indigestion. Je vous souhaite à tous une bonne et méchante année 2014.</p>
+<p>A très bientôt!</p>
+</article>
+
+<footer>
+  <p>Originally published on <strong>Le méchant blog</strong> &mdash; <a href="../">from0</a></p>
+</footer>
+
+</body>
+</html>

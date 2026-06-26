@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PHP5 : Les objets ne sont pas des (détestables) références — Le méchant blog</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --text: #1a1a2e;
+    --accent: #4361ee;
+    --accent2: #3a0ca3;
+    --radius: 8px;
+    --code-bg: #1e1e2e;
+    --code-text: #cdd6f4;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.7; min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #fff; padding: 40px 20px 32px;
+  }
+  header nav { max-width: 780px; margin: 0 auto; }
+  header nav a {
+    color: #f59e0b; text-decoration: none; font-size: .9em; font-weight: 600;
+  }
+  header nav a:hover { color: #fbbf24; }
+  article {
+    max-width: 780px; margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  article h1 {
+    font-size: 2em; color: var(--accent2); margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .meta {
+    color: #666; font-size: .9em; margin-bottom: 32px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .tag {
+    display: inline-block; padding: 2px 10px;
+    border-radius: 12px; font-size: .8em; font-weight: 600;
+    background: #e8f4fd; color: #1a73e8;
+  }
+  article h2 {
+    font-size: 1.4em; margin: 32px 0 12px; color: var(--accent2);
+    border-bottom: 2px solid #e8e8e8; padding-bottom: 4px;
+  }
+  article h3 { font-size: 1.15em; margin: 24px 0 8px; }
+  article p { margin-bottom: 16px; }
+  article ul, article ol { margin: 0 0 16px 24px; }
+  article li { margin-bottom: 6px; }
+  article a { color: var(--accent); }
+  article img, article .article-img {
+    max-width: 100%; height: auto; border-radius: var(--radius);
+    margin: 8px 0;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 16px 20px; border-radius: var(--radius);
+    overflow-x: auto; margin: 16px 0 20px;
+    font-size: .88em; line-height: 1.5;
+  }
+  code {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+  :not(pre) > code {
+    background: #e8e8ee; padding: 2px 6px;
+    border-radius: 4px; font-size: .9em;
+  }
+  blockquote {
+    border-left: 4px solid var(--accent);
+    padding: 12px 16px; margin: 16px 0;
+    background: #f0f0ff; border-radius: 0 var(--radius) var(--radius) 0;
+    color: #444; font-style: italic;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 16px 0;
+  }
+  th, td {
+    padding: 8px 12px; text-align: left;
+    border-bottom: 1px solid #e0e0e0; font-size: .9em;
+  }
+  th { background: #f0f0f5; font-weight: 600; }
+  footer {
+    text-align: center; padding: 32px 20px;
+    font-size: .85em; color: #888;
+  }
+  footer a { color: var(--accent); }
+  @media (max-width: 600px) {
+    article h1 { font-size: 1.5em; }
+    article { padding: 24px 16px 60px; }
+    pre { font-size: .8em; padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <nav><a href="../">&larr; from0</a></nav>
+</header>
+
+<article>
+  <h1>PHP5 : Les objets ne sont pas des (détestables) références</h1>
+  <div class="meta">
+    <span class="tag">PHP</span>
+    <time datetime="2013-04-08">8 avril 2013</time>
+  </div>
+
+  <p>Depuis PHP5, j’entends souvent dire que les objets utilisent les références lors d’une assignation ou lorsqu’on les passe en paramètre par exemple. Même la documentation officielle (<a href="http://php.net/manual/fr/language.operators.assignment.php" class="external external_icon" target="_blank">http://php.net/manual/fr/language.operators.assignment.php</a>) l’explique noir sur blanc:</p>
+<blockquote><p>« <i>Une exception au comportement d&rsquo;assignation par valeur en PHP est le type object, ceux-ci sont assignés par référence dans PHP 5. La copie d&rsquo;objet doit être explicitement demandée grâce au mot-clé clone. </i>».</p></blockquote>
+<p>C’est ce que l’on dit pour simplifier les choses, mais nous verrons plus loin que ce n’est pas tout à fait vrai.</p>
+<p>En effet, je me suis penché sur la chose lors d’une mission où j’ai rejoint une équipe qui a dû passer une grosse application de PHP4 vers PHP5.3. A l’époque de PHP4, les objets étaient passés en copie, ce qui pouvait poser deux gros problèmes:</p>
+<ul>
+<li>Explosion de la mémoire</li>
+<li>Mise à jour d’une copie d’un objet en pensant travailler sur l’original.</li>
+</ul>
+<p>Le « &amp; » (pour « référence ») était donc vu comme le messie pour pallier à ce problème.</p>
+<div>
+<p><b>En php4 :</b></p><pre><code>$monObjet = new stdClass() ;
+$monObjet-&gt;i = 1 ;
+
+Function add(&amp;$obj){ //Le « &amp; » est obligatoire pour que l’objet « original » soit également modifié
+   $obj-&gt;i++ ;
+}
+add($monObjet) ;
+echo $monObjet-&gt;i ; //Affiche 2</code></pre>
+<p>Et en PHP5, le résultat est le même donc tout va bien ! Le « &amp; » n’a donc, à priori, pas d’impact pour les objets.</p>
+<p>&nbsp;</p>
+</div>
+<h2>1. Mon problème</h2>
+<p>Je vais rapidement illustrer un problème récurrent que j’ai pu observer lors de l’analyse du projet. J’ai synthétisé au maximum le code pour n’avoir que le strict minimum. Gardez également en tête que nous venions d’une application PHP4 qui nécessitait l’utilisation des références pour les objets.</p>
+<p>Nous avons d’abord une classe « Tab », qui a un indice (int) :</p>
+<div>
+<pre><code>class Tab{
+
+    private $indice; //Indice du Tab
+
+    public function setIndice($indice) {
+        $this-&gt;indice = $indice;
+    }
+
+    public function getIndice() {
+        return $this-&gt;indice;
+    }
+}</code></pre>
+
+</div>
+<p>Et un TabManager, qui gère des « Tab »:</p>
+<div>
+<pre><code>class TabManager{
+
+    private $currentTab; //Le Tab « en cours »
+
+    public function setCurrentTab (&amp; $tab) { //Assigne le « tab en cours »
+        $this-&gt;currentTab = &amp; $tab;
+    }
+
+    public function getTabWithIndice($indice){ //Création d’un Tab, avec l’indice donné en paramètre. Ce tab sera indiqué comme le « tab en cours »
+        $this-&gt;currentTab = new Tab();
+        $this-&gt;currentTab -&gt;setIndice($indice);
+        return $this-&gt;currentTab;
+    }
+
+}</code></pre>
+
+</div>
+<p>Et maintenant l’exécution (simplifiée) en PHP5:</p>
+<div>
+<pre><code>//Mon gestionnaire de « Tab »
+$tabManager = new TabManager();
+
+//Mon premier « Tab », qui sera le « Tab en cours »
+$premierTab = new Tab();
+$premierTab -&gt;setIndice(1);
+$tabManager-&gt;setCurrentTab($premierTab);
+
+$deuxiemeTab = $tabManager-&gt;getTabWithIndice(2); //Récupération d’un deuxième « Tab ».
+
+//Je veux encore faire une opération sur mon premier « Tab »
+echo $premierTab-&gt;getIndice(); //Ho surprise... $premierTab-&gt;indice vaut … 2 !</code></pre>
+
+</div>
+<p>Comme vous pouvez le constater, le premier « Tab » s’est transformé en deuxième « Tab » sans que l’on ait demandé quoique ce soit : C’est mesquin ! La faute à qui ? Les objets ? Les références ? Pourquoi ? Comment ? Quel suspens. Je me vois tout à coup dans une série policière, mon enquête peut débuter. Mon premier témoin sera la <a href="http://www.php.net/" class="external external_icon" target="_blank">doc officielle</a> : Elle a toujours quelque chose d’intéressant à raconter.</p>
+<p>&nbsp;</p>
+<h2>2. Les objets démystifiés! On m’aurait menti ?</h2>
+<p>Après une rapide recherche, j’arrive sur une page de la doc officielle qui parle des références (<a href="http://www.php.net/manual/fr/language.oop5.references.php" class="external external_icon" target="_blank">http://www.php.net/manual/fr/language.oop5.references.php</a>). On peut y lire ceci :</p>
+<blockquote><p>« Depuis PHP 5, un une variable objet ne contient plus l&rsquo;objet en lui-même. Elle contient seulement identifiant d&rsquo;objet, qui permet aux accesseurs d&rsquo;objets de trouver cet objet. Lorsque l&rsquo;objet est utilisé comme argument, retourné par une fonction, ou assigné à une autre variable, les différentes variables ne sont pas des alias (ndlr : références) : elles contiennent des copies de l&rsquo;identifiant, qui pointent sur le même objet. »</p></blockquote>
+<p>Première information importante, on ne manipule pas directement un objet, mais un <b>identifiant</b>. Pour info, c’est de l’hexadécimal (ex : 0000000041ae805200000000642707c6). Pour le connaitre, vous pouvez utiliser la méthode « <a href="http://php.net/manual/en/function.spl-object-hash.php" class="external external_icon" target="_blank">spl_object_hash</a> ».</p>
+<p>Deuxième chose intéressante, lorsque l’on passe un objet en paramètre d’une fonction (ou qu’on l’assigne à une autre variable), on ne lui donne, en fait, qu’<b>une copie</b> de son identifiant. Une copie ? Cela ressemble furieusement à ce qu’il se passe pour un tableau, un entier ou une chaine de caractères, non ? Hé bien oui, c’est pareil !</p>
+<p>Pour en avoir le cœur net, lançons un petit test :</p>
+<div>
+<pre><code>function add($o){
+    $o-&gt;i++;
+    $o = null;
+}
+
+$monObjet = new stdClass();
+$monObjet-&gt;i = 1;
+add($monObjet);
+echo $monObjet-&gt;i; //Affiche 2</code></pre>
+<br/>
+Il n’y a rien d’incroyable dans cet exemple, si ce n’est que cela confirme les dires de la doc :</p>
+</div>
+<ul>
+<li>« $o » a le même identifiant que « $monObjet ». Ce qui nous permet de <b>modifier le contenu </b>et d&rsquo;appeler les méthodes du même objet.</li>
+<li>La fonction « add » reçoit <b>une copie de l’identifiant</b>. En effet, la variable « $o », interne à la fonction, a beau être écrasée par « null », cela n’impacte pas l’objet extérieur. Pourquoi ? Tout simplement parce que <b>ce n’est pas une référence</b>. L’effet est donc le même que pour un paramètre de type entier, tableau ou autre.</li>
+</ul>
+<p>Le mythe est tombé : En objet, on travaille donc aussi avec des « copies ». Certes, ce sont des copies d&rsquo;identifiant et pas des copies de valeur (« clone ») comme pour tous les autres types, mais c’est la seule subtilité. Ce stratagème « made in PHP5 » nous permet de <b>modifier le contenu</b> d’un même objet, un peu partout dans le code, sans savoir si celui-ci a bien été donné/assigné en référence. Les objets n’ont donc plus rien à voir avec les références.</p>
+<p>Il était important de connaitre ce principe pour attaquer la deuxième partie de l’enquête : <i>Les références</i>/<i>alias</i>.</p>
+<p>&nbsp;</p>
+<h2>3. Les références/alias… Aïe, j’ai mal</h2>
+<p>Pour commencer, revenons sur la doc officielle (<a href="http://www.php.net/manual/fr/language.oop5.references.php" class="external external_icon" target="_blank">http://www.php.net/manual/fr/language.oop5.references.php</a>) qui nous donne un premier indice sur les références :</p>
+<blockquote><p><i> « Une référence PHP est un alias, qui permet à deux variables différentes de représenter la même valeur »</i></p></blockquote>
+<p>On parle bien de <b>variables</b>. J’en conclu que, dans le monde des références, tout le monde est logé à la même enseigne, y compris les objets. On aura beau travailler avec une chaine de caractère, un entier ou un objet, le résultat sera le même. Tant mieux, s’il n’y a pas d’exception, ce sera plus facile à expliquer J Cependant, laissez-moi vous dire que ce ne sera pas, pour autant, une partie de plaisir.</p>
+<p>Petit rappel important avant de commencer: Lorsqu’une méthode reçoit un paramètre en référence (&amp;$monParam) pour l’assigner à une variable interne d’un objet, assurez-vous de bien assigner la variable par référence, sinon PHP vous en fera une copie. Un simple exemple :</p>
+<div>
+<pre><code>class Operation{
+   public $a = 0;
+   public function incremente(&amp;$a){ //Incrémente
+      $this-&gt;a = $a; //Pas de « &amp; » à l’assignation
+      $this-&gt;a ++ ; //J’incrémente en pensant aussi incrémenter « $a » reçu en paramètre
+   }
+}
+$aGlobal = 1 ;
+$op = new Operation() ;
+$op-&gt;incremente($aGlobal) ; //Je passe mon $aGlobal, par référence, donc je m’attends à ce que « add » modifie ma variable.
+echo $aGlobal ; //Affiche 1</code></pre>
+
+</div>
+<p>Comme vous pouvez le voir, indiquer au paramètre que c’est une référence n’est pas toujours suffisant. Faites donc bien attention lorsque vous travaillez avec des références dans des objets. Un simple oubli et je vous garantis de longues journées « à la recherche du &amp; perdu ».</p>
+<p>Ceci étant dit, revenons-en à nos moutons ! Pour bien comprendre les références, commençons simplement par écrire une méthode qui recevra 2 paramètres :</p>
+<ul>
+<li>Le premier est passé en référence car on veut que la variable donné en paramètre (l’originale, c’est-à-dire « $un ») soit aussi modifié.</li>
+<li>Le deuxième est une simple valeur passée en copie.</li>
+</ul>
+<div>
+<pre><code>function copy_param_ref(&amp;$a, $b){
+   $a = $b; //Assignation par copie
+}
+$un = 1 ;
+$deux = 2 ;
+copy_param_ref ($un, $deux) ;
+echo $un ; //Affiche 2</code></pre>
+
+</div>
+<p>A présent, faisons le même test, mais avec une assignation par référence (=&amp;). Cet exemple n’est pas pris au hasard, puisque je suis souvent tombé dessus lors de la migration de notre application de PHP4 à PHP5.3.</p>
+<div>
+<pre><code>function copy_full_ref(&amp;$a, $b){
+   $a = &amp;$b; //Assignation par référence
+}
+$un = 1 ;
+$deux = 2 ;
+copy_full_ref($un, $deux) ;
+echo $un ; //Affiche 1</code></pre>
+
+</div>
+<p>Aïe, alors que nous avons utilisé les références, notre variable « $un », n’a pas été modifiée ! C’est comme si aucune référence n’avait existé. Trop de références, tuerait-elle la référence ? Afin d’en avoir le cœur net, j’ai décidé d’écrire tous les cas possibles pour, peut-être, avoir des indices sur leurs manières de fonctionner. Voici la liste des 8 cas :</p>
+<div>
+<pre><code>//Les fonctions qui reçoivent « $a » et « $b » par référence.  L’assignation se fait alternativement par référence ou par copie
+function paramAB-assign_ref (&amp;$a, &amp;$b){$a = &amp;$b;} //Assignation par référence
+function paramAB-assign_copy (&amp;$a, &amp;$b){$a = $b;} //Assignation par copie
+
+//Les fonctions dont  « $a » est une référence. L’assignation se fait alternativement par référence ou par copie
+function paramA-assign_ref (&amp;$a, $b){$a = &amp;$b;} //assignation par référence
+function paramA-assign_copy (&amp;$a, $b){$a = $b;} //Assignation par copie
+
+//Les fonctions dont  « $b » est une référence. L’assignation se fait alternativement par référence ou par copie
+function paramB-assign_ref ($a, &amp;$b){$a = &amp;$b;} //assignation par référence
+function paramB-assign_copy ($a, &amp;$b){$a = $b;} //Assignation par copie
+
+//Les fonctions qui ont « $a » et « $b » en copie. L’assignation se fait alternativement par référence ou par copie
+function param-assign_ref ($a, $b){$a = &amp;$b;} //assignation par référence
+function param-assign_copy ($a, $b){$a = $b;} //Assignation par copie</code></pre>
+<br/>
+Je me suis amusé à tester chacune d’entre elles de cette manière (exemple avec la première méthode de la liste) :</p>
+</div>
+<div>
+<pre><code>$un = 1 ;
+$deux = 2 ;
+paramAB-assign_ref ($un, $deux) ; //Appel à une des 8 fonctions
+echo $un ;</code></pre>
+<br/>
+Le résultat final de la variable « $un » sera notre indicateur : Vaut-elle 1 ou 2 ? Une fois les exécutions terminées, j’ai pu regrouper les méthodes en deux ensembles :</p>
+</div>
+<ul>
+<li>« $un » vaut « 1 »:
+<ul>
+<li>paramAB-assign_ref</li>
+<li>paramA-assign_ref</li>
+<li>paramB-assign_ref</li>
+<li>param-assign_ref</li>
+<li>paramB-assign_copy ¹</li>
+<li>param-assign_copy ¹</li>
+</ul>
+</li>
+</ul>
+<ul>
+<li>« $un » vaut « 2 »:
+<ul>
+<li>paramAB-assign_copy</li>
+<li>paramA-assign_copy</li>
+</ul>
+</li>
+</ul>
+<p>¹: Attention toutefois, en Php 5.3, on peut encore (même si c’est déprécié) forcer un paramètre qui demande une copie (pas de &amp; devant le nom de la variable du paramètre) à recevoir une référence, en l’indiquant explicitement lors de l’appel à la fonction (Ex : maFonction (<b>&amp;</b>$a,<b>&amp;</b>$b)). Si vous faites cela, alors « paramB-assign_copy » et « param-assign_copy » changeront aussi la valeur de « $un » et seront donc dans le deuxième ensemble.</p>
+<p>Voici ce que l&rsquo;’on peut en conclure :</p>
+<ul>
+<li>Il est visiblement acquis que donner « $deux » en référence ou en copie, ne change strictement rien au résultat de « $un ». Ça se tient ! Au final que « $b » soit une référence ou non, c’est la valeur de « $un » qui nous intéresse.</li>
+<li>Assigner par référence ne change pas « $un » non plus… Ça c’est étrange, mais nous y reviendrons !</li>
+</ul>
+<p>Par contre, pour modifier la variable « $un », il faut deux conditions:</p>
+<ul>
+<li>« $un » doit être passé en référence. En effet, passer la variable en copie, ne changera que la valeur de…sa copie.</li>
+<li>L’assignation doit se faire via un copy (« = ») et non pas par référence (« = &amp; »).</li>
+</ul>
+<p>Tout est clair, sauf un cas: Pourquoi « $un » n’est pas modifié pour les fonctions qui assignent par référence (« paramA-assign_ref » et « paramAB-assign_ref ») ? Voici un exemple plus simple pour expliquer le problème :</p>
+<div>
+<pre><code>$a = 1 ;
+$b = 2 ;
+$a1 = &amp;$a ; //$a1 est une référence vers « $a »
+$a1 = $b ; //$a change également de valeur et vaut 2</code></pre>
+
+</div>
+<p>« $a » vaut 2 car « $a1 » est une référence vers « $a ». Si par contre, j’assigne par référence…</p>
+<div>
+<pre><code>$a = 1 ;
+$b = 2 ;
+$a1 = &amp;$a ; //$a1 est une référence vers « $a »
+$a1 = &amp;$b ; //$a ne change pas de valeur et vaut donc toujours 1</code></pre>
+<br/>
+« $a » vaut toujours 1 et n’a pas changé ! Mais pourquoi ? La réponse n’est pas évidente et n’est indiquée nulle part dans la documentation.</p>
+</div>
+<p>Heureusement la communauté veille, et visiblement, je ne suis pas le premier à m’être posé la question. Après avoir épluché les commentaires des développeurs, tous en sont arrivés à la même conclusion : Lorsque vous assignez par référence une variable à une autre, <b>seule la variable concernée est modifiée </b>(dans notre cas, la variable « $a1 »). Il n’y a donc pas de dommage collatéral pour les variables ayant la même référence, elles continuent de pointer vers la même valeur et ne sont pas impactées par l’opération. Fou, n’est-ce pas ?</p>
+<p>Je vous laisse avec un dernier casse-tête.</p>
+<div>
+<pre><code>$a = 1;
+$b = 2;
+$a1 = &amp;$a; //$a1 est une référence vers $a
+$a2 = &amp;$a; //$a2 est aussi une référence vers $a
+$a = &amp;$b ; //Maintenant, $a est une référence vers $b</code></pre>
+
+</div>
+<p>A votre avis, que vaut « $a1 » et « $a2 » ? On pourrait se dire : « $a » est une référence vers « $b », et comme « $a1 » et « $a2 » sont des références vers « $a », alors « $a1 » et « $a2 » sont également modifiés… Bien essayé, mais ça n’est pas le cas J. En effet, « $b » est assigné à « $a » par référence, donc seul « $a » change. CQFD.</p>
+<p>&nbsp;</p>
+<h2>4. Conclusion</h2>
+<p>Au terme de cet article, que pouvons-nous retenir ?</p>
+<p>Tout d’abord, ne dites plus qu’un objet est une référence : C’est un raccourci rapide pour dire que vous ne devez plus utiliser les références lorsque vous passez votre objet à une méthode. Un objet « est » un identifiant (voir «<a href="http://php.net/manual/en/function.spl-object-hash.php" class="external external_icon" target="_blank">spl_object_hash</a> ») qui est <b>copié</b> lorsqu’il est donné en paramètre ou assigné à une autre valeur, comme le sont les chaines de caractères, les tableaux ou les entiers.</p>
+<p>Ensuite, on vous l’a sans doute déjà dit mais, n’utilisez jamais les références à moins de savoir vraiment ce que vous faites (et de l’indiquer pour ceux qui reprendront votre code)! Comme vous avez pu le constater, c’est un nid à problèmes. Selon moi, utiliser des références est souvent preuve d’une mauvaise architecture. Et contrairement à ce que l’on pense, les références n’améliorent pas les performances, pire, elles pourraient les dégrader dans pas mal de cas&#8230;</p>
+</article>
+
+<footer>
+  <p>Originally published on <strong>Le méchant blog</strong> &mdash; <a href="../">from0</a></p>
+</footer>
+
+</body>
+</html>

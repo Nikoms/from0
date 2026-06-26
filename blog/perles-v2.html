@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Les perles de code: volume 2 — Le méchant blog</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --text: #1a1a2e;
+    --accent: #4361ee;
+    --accent2: #3a0ca3;
+    --radius: 8px;
+    --code-bg: #1e1e2e;
+    --code-text: #cdd6f4;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.7; min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #fff; padding: 40px 20px 32px;
+  }
+  header nav { max-width: 780px; margin: 0 auto; }
+  header nav a {
+    color: #f59e0b; text-decoration: none; font-size: .9em; font-weight: 600;
+  }
+  header nav a:hover { color: #fbbf24; }
+  article {
+    max-width: 780px; margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  article h1 {
+    font-size: 2em; color: var(--accent2); margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .meta {
+    color: #666; font-size: .9em; margin-bottom: 32px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .tag {
+    display: inline-block; padding: 2px 10px;
+    border-radius: 12px; font-size: .8em; font-weight: 600;
+    background: #e8f4fd; color: #1a73e8;
+  }
+  article h2 {
+    font-size: 1.4em; margin: 32px 0 12px; color: var(--accent2);
+    border-bottom: 2px solid #e8e8e8; padding-bottom: 4px;
+  }
+  article h3 { font-size: 1.15em; margin: 24px 0 8px; }
+  article p { margin-bottom: 16px; }
+  article ul, article ol { margin: 0 0 16px 24px; }
+  article li { margin-bottom: 6px; }
+  article a { color: var(--accent); }
+  article img, article .article-img {
+    max-width: 100%; height: auto; border-radius: var(--radius);
+    margin: 8px 0;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 16px 20px; border-radius: var(--radius);
+    overflow-x: auto; margin: 16px 0 20px;
+    font-size: .88em; line-height: 1.5;
+  }
+  code {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+  :not(pre) > code {
+    background: #e8e8ee; padding: 2px 6px;
+    border-radius: 4px; font-size: .9em;
+  }
+  blockquote {
+    border-left: 4px solid var(--accent);
+    padding: 12px 16px; margin: 16px 0;
+    background: #f0f0ff; border-radius: 0 var(--radius) var(--radius) 0;
+    color: #444; font-style: italic;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 16px 0;
+  }
+  th, td {
+    padding: 8px 12px; text-align: left;
+    border-bottom: 1px solid #e0e0e0; font-size: .9em;
+  }
+  th { background: #f0f0f5; font-weight: 600; }
+  footer {
+    text-align: center; padding: 32px 20px;
+    font-size: .85em; color: #888;
+  }
+  footer a { color: var(--accent); }
+  @media (max-width: 600px) {
+    article h1 { font-size: 1.5em; }
+    article { padding: 24px 16px 60px; }
+    pre { font-size: .8em; padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <nav><a href="../">&larr; from0</a></nav>
+</header>
+
+<article>
+  <h1>Les perles de code: volume 2</h1>
+  <div class="meta">
+    <span class="tag">Perles</span>
+    <time datetime="2013-09-12">12 septembre 2013</time>
+  </div>
+
+  <p>Aujourd&rsquo;hui, nouvelle fournée de perles.</p>
+<p>Au programme,du commentaire &laquo;&nbsp;utile&nbsp;&raquo;, une existante native réécrite (et bugée), et une condition qui ne fait pas ce qu&rsquo;elle devrait 🙂</p>
+<h2></h2>
+<h2>Le &laquo;&nbsp;if&nbsp;&raquo; de trop&#8230;Ou le &laquo;&nbsp;else&nbsp;&raquo; de trop peu?</h2>
+<p></p><pre><code>function getFlow() {
+	if (isset($this-&gt;datas[&quot;flow_id&quot;])) if (isset($this-&gt;datas[&quot;flow_id&quot;])) return $this-&gt;datas[&quot;flow_id&quot;];
+	else return 0;
+}</code></pre>
+<p>Review de code 1:  Pourquoi deux fois exactement le même if l&rsquo;un à la suite de l&rsquo;autre? Peut-être un copier coller.<br/>
+Review de code 2: Si &laquo;&nbsp;flow_id&nbsp;&raquo; n&rsquo;est pas setté, la méthode ne renvoit pas &laquo;&nbsp;0&nbsp;&raquo; (zéro), comme le laisse entre la seconde ligne. En effet, si l&rsquo;on indente son code correctement, voici ce que cela donne:</p><pre><code>function getFlow() {
+  if (isset($this-&gt;datas[&quot;flow_id&quot;])){ 
+    if (isset($this-&gt;datas[&quot;flow_id&quot;])){
+      return $this-&gt;datas[&quot;flow_id&quot;];
+    }else{
+      return 0;
+    }
+  }
+}</code></pre>
+<p>En ajoutant les accolades, c&rsquo;est encore plus clair: Si &laquo;&nbsp;flow_id&nbsp;&raquo; n&rsquo;existe pas, la méthode ne renverra rien.</p>
+<h2></h2>
+<h2>Le commentaire pour les aveugles</h2>
+<p>Juste une petite anecdote ici, rien de bien méchant.</p><pre><code>// REMARK: if block = 3
+if ($block_id == 3) {
+  //du code...
+}</code></pre>
+<p>Review de code: Merci pour ce commentaire qui m&rsquo;a bien aidé à comprendre la condition.</p>
+<h2></h2>
+<h2>L&rsquo; &laquo;&nbsp;array_unique&nbsp;&raquo; du pauvre</h2>
+<p></p><pre><code>function compare(array $values) {
+	$valuesList = array();
+	foreach ($values as $value) {
+		if (!empty($valuesList)) {
+			if (in_array($value,$valuesList)) {
+				return false;
+			}
+		}
+		$valuesList[] = $valuesList;
+	}
+	return true;
+}</code></pre>
+<p>Petite explication:</p>
+<ul>
+<li>La fonction reçoit un tableau de valeurs (toutes des chaines de caractères).</li>
+<li>On prépare un autre tableau de backup ($valuesList), qui va sans doute servir à transvaser les valeurs une à une&#8230; Enfin c&rsquo;est ce que l&rsquo;on croit.</li>
+<li>On boucle sur les valeurs,
+<ul>
+<li>Pour chaque valeur, si le tableau de backup n&rsquo;est pas vide, on vérifie que la valeur en cours n&rsquo;est pas déjà dedans. Si c&rsquo;est le cas, on renvoi false</li>
+<li>Si la valeur ne se trouve pas dans le tableau de backup, <strong>on l&rsquo;insère dans lui même</strong>. <strong>Et ça c&rsquo;est beau</strong>. On va donc avoir un tableau qui va contenir uniquement un autre tableau, et ainsi de suite&#8230; Et ce autant de fois qu&rsquo;on a de valeurs.</li>
+</ul>
+</li>
+</ul>
+<p>La méthode renvoi donc TOUJOURS true. et &laquo;&nbsp;$valueList&nbsp;&raquo; vaut ceci après 2 itérations:</p><pre><code>array(
+  array(
+    array()
+  )
+)</code></pre>
+<p>Review de code 1: Nom de la méthode pas très explicite<br/>
+Review de code 2: Renvoi toujours true<br/>
+Review de code 3: Idée d&rsquo;amélioration en une ligne (au cas où): return array_unique($values) === $values<br/>
+Review de code 4: Dommage que ton test unitaire soit commenté,&#8230; Mais je comprends mieux pourquoi 🙂</p>
+<p>&nbsp;</p>
+<p>A bientôt pour de nouvelles aventures. J&rsquo;arrive avec plein d&rsquo;articles sur les patterns. &laquo;&nbsp;Y&rsquo;a plus qu&rsquo;à&nbsp;&raquo;</p>
+</article>
+
+<footer>
+  <p>Originally published on <strong>Le méchant blog</strong> &mdash; <a href="../">from0</a></p>
+</footer>
+
+</body>
+</html>

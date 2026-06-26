@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Déploiement avec Capistrano et Github (sous Windows) — Le méchant blog</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --text: #1a1a2e;
+    --accent: #4361ee;
+    --accent2: #3a0ca3;
+    --radius: 8px;
+    --code-bg: #1e1e2e;
+    --code-text: #cdd6f4;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.7; min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #fff; padding: 40px 20px 32px;
+  }
+  header nav { max-width: 780px; margin: 0 auto; }
+  header nav a {
+    color: #f59e0b; text-decoration: none; font-size: .9em; font-weight: 600;
+  }
+  header nav a:hover { color: #fbbf24; }
+  article {
+    max-width: 780px; margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  article h1 {
+    font-size: 2em; color: var(--accent2); margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .meta {
+    color: #666; font-size: .9em; margin-bottom: 32px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .tag {
+    display: inline-block; padding: 2px 10px;
+    border-radius: 12px; font-size: .8em; font-weight: 600;
+    background: #e8f4fd; color: #1a73e8;
+  }
+  article h2 {
+    font-size: 1.4em; margin: 32px 0 12px; color: var(--accent2);
+    border-bottom: 2px solid #e8e8e8; padding-bottom: 4px;
+  }
+  article h3 { font-size: 1.15em; margin: 24px 0 8px; }
+  article p { margin-bottom: 16px; }
+  article ul, article ol { margin: 0 0 16px 24px; }
+  article li { margin-bottom: 6px; }
+  article a { color: var(--accent); }
+  article img, article .article-img {
+    max-width: 100%; height: auto; border-radius: var(--radius);
+    margin: 8px 0;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 16px 20px; border-radius: var(--radius);
+    overflow-x: auto; margin: 16px 0 20px;
+    font-size: .88em; line-height: 1.5;
+  }
+  code {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+  :not(pre) > code {
+    background: #e8e8ee; padding: 2px 6px;
+    border-radius: 4px; font-size: .9em;
+  }
+  blockquote {
+    border-left: 4px solid var(--accent);
+    padding: 12px 16px; margin: 16px 0;
+    background: #f0f0ff; border-radius: 0 var(--radius) var(--radius) 0;
+    color: #444; font-style: italic;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 16px 0;
+  }
+  th, td {
+    padding: 8px 12px; text-align: left;
+    border-bottom: 1px solid #e0e0e0; font-size: .9em;
+  }
+  th { background: #f0f0f5; font-weight: 600; }
+  footer {
+    text-align: center; padding: 32px 20px;
+    font-size: .85em; color: #888;
+  }
+  footer a { color: var(--accent); }
+  @media (max-width: 600px) {
+    article h1 { font-size: 1.5em; }
+    article { padding: 24px 16px 60px; }
+    pre { font-size: .8em; padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <nav><a href="../">&larr; from0</a></nav>
+</header>
+
+<article>
+  <h1>Déploiement avec Capistrano et Github (sous Windows)</h1>
+  <div class="meta">
+    <span class="tag">Déploiement</span>
+    <time datetime="2013-09-26">26 septembre 2013</time>
+  </div>
+
+  <p>Le déploiement d&rsquo;un site internet est toujours une opération un peu stressante lorsque l&rsquo;on a beaucoup de taches à effectuer. Ça l&rsquo;est encore plus lorsque celles-ci nécessitent des opérations manuelles comme l&rsquo;upload de presque tous (surtout pas le dossier &laquo;&nbsp;upload&nbsp;&raquo;!) les fichiers via ftp, modification d&rsquo;un table Sql, ajout d&rsquo;un cron, etc&#8230; Bref si toutes ces opérations ne sont pas automatisées, cela peut prendre du temps et, comme tout bon humain que vous êtes, vous vous exposez à commettre des erreurs.</p>
+<p>Pensez-vous que Facebook procède de la sorte? Je n&rsquo;en suis pas sûr. D&rsquo;autant plus qu&rsquo;ils vont jusqu&rsquo;à plusieurs déploiements par jour et qu&rsquo;ils ont des centaines (voire des milliers) de serveurs. Je plains le petit monsieur de Facebook qui ouvre son &laquo;&nbsp;FileZilla&nbsp;&raquo; à chaque mise-à-jour. 🙂</p>
+<p>Aujourd&rsquo;hui, le déploiement automatisé existe et est à la porté de tous grâce à des outils comme &laquo;&nbsp;Capistrano&nbsp;&raquo;. Alors pourquoi ne pas vous y mettre?</p>
+<p>Voici les quelques étapes pour déployer du code hébergé sur &laquo;&nbsp;Github&nbsp;&raquo;. J&rsquo;ai pris Windows comme plateforme de déploiement, mais j&rsquo;aurais très bien pu prendre &laquo;&nbsp;MacOs&nbsp;&raquo; ou &laquo;&nbsp;Linux&nbsp;&raquo;. La seule différence se situe dans l&rsquo;installation de git et ruby.</p>
+<p>&nbsp;</p>
+<h2>Installer git</h2>
+<p>Git sera notre outils de versioning. Pour exécuter ses commandes, nous avons besoin de l&rsquo;installer. Voici l&rsquo;adresse pour l&rsquo;installateur Windows: <a href="http://git-scm.com/download/win" class="external external_icon" target="_blank">http://git-scm.com/download/win. </a></p>
+<p>Après un &laquo;&nbsp;next, next, next&nbsp;&raquo;, je vous propose de lancer &laquo;&nbsp;Git Bash&nbsp;&raquo; (gardez le ouvert, nous en aurons encore besoin) qui doit se trouver dans &laquo;&nbsp;C:/Program Files (x86)/Git&nbsp;&raquo; si vous n&rsquo;avez pas créer de raccourci. Nous allons voir si vous pouvez accéder à votre repository sur github. Mettons nous d&rsquo;abord dans un nouveau dossier qui va nous servir de test.</p><pre><code>cd ~ &amp;&amp; mkdir mechant &amp;&amp; cd mechant</code></pre>
+<p>Ceci va créer un répertoire &laquo;&nbsp;mechant&nbsp;&raquo; dans votre dossier personnel (C:/Users/<em>[votre utilisateur]</em>), et vous y emmener.</p>
+<p>&nbsp;</p>
+<h2>Test de de la communication avec github</h2>
+<p>Récupérez ensuite l&rsquo;adresse de votre repository Git. Pour ma part, j&rsquo;ai pris &laquo;&nbsp;https://github.com/Nikoms/deployme.git&nbsp;&raquo; qui est un simple exemple créé pour l&rsquo;occasion.</p><pre><code>git ls-remote https://github.com/Nikoms/deployme.git</code></pre>
+<p>Il est possible que l&rsquo;on vous interpelle:</p>
+<blockquote><p>The authenticity of host &lsquo;github.com (192.30.252.130)&rsquo; can&rsquo;t be established.<br/>
+RSA key fingerprint is xx:xx:xx:xx&#8230;&#8230;.<br/>
+Are you sure you want to continue connecting (yes/no)?</p></blockquote>
+<p>Confirmez en tapant &laquo;&nbsp;yes&nbsp;&raquo;. Voici ce que vous devriez voir:</p>
+<blockquote><p>$ git ls-remote https://github.com/Nikoms/deployme.git<br/>
+952c31e17af96d440057be81e2d09c8ed63c1fa3        HEAD<br/>
+952c31e17af96d440057be81e2d09c8ed63c1fa3        refs/heads/master</p></blockquote>
+<p>Si vous ne voulez pas utiliser github en mode https, vous devrez générer des clés ssh. Je vous propose de suivre les recommandations ici : <a href="https://help.github.com/articles/generating-ssh-keys" class="external external_icon" target="_blank">https://help.github.com/articles/generating-ssh-keys</a></p>
+<p>&nbsp;</p>
+<h2>Installer Ruby</h2>
+<p>Etant donné que Capistrano fonctionne sous Ruby, vous devez d&rsquo;abord l&rsquo;installer. Je vous rassure, vous n&rsquo;allez pas coder une ligne de code 🙂</p>
+<p>Comme nous lancerons notre déploiement sous windows, l&rsquo;installation se fera via un simple &laquo;&nbsp;.exe&nbsp;&raquo; que vous trouverez ici: <a title="Installation de Ruby" href="http://rubyinstaller.org/downloads/" class="external external_icon" target="_blank">http://rubyinstaller.org/downloads/</a>. N&rsquo;oubliez pas d&rsquo;indiquer qu&rsquo;il faut ajouter &laquo;&nbsp;Ruby&nbsp;&raquo; dans votre variable &laquo;&nbsp;PATH&nbsp;&raquo; lors de l&rsquo;installation.</p>
+<p>Pour être certain que tout soit bien installé, dans &laquo;&nbsp;Git Bash&nbsp;&raquo;, tapez &laquo;&nbsp;gem -v&nbsp;&raquo; (prononcez jèm). Si windows reconnait la commande, vous verrez la version installée.</p>
+<p>&nbsp;</p>
+<h2>Installation de Capistrano</h2>
+<p>Installons &laquo;&nbsp;la bête&nbsp;&raquo;, via la console &laquo;&nbsp;Git Bash&nbsp;&raquo;. Voici la commande:</p><pre><code>gem install capistrano</code></pre>
+<p>Voici le résultat:</p>
+<blockquote><p>Fetching: highline-1.6.19.gem (100%)<br/>
+Successfully installed highline-1.6.19<br/>
+Fetching: net-ssh-2.7.0.gem (100%)<br/>
+Successfully installed net-ssh-2.7.0<br/>
+Fetching: net-sftp-2.1.2.gem (100%)<br/>
+Successfully installed net-sftp-2.1.2<br/>
+Fetching: net-scp-1.1.2.gem (100%)<br/>
+Successfully installed net-scp-1.1.2<br/>
+Fetching: net-ssh-gateway-1.2.0.gem (100%)<br/>
+Successfully installed net-ssh-gateway-1.2.0<br/>
+Fetching: capistrano-2.15.5.gem (100%)<br/>
+Successfully installed capistrano-2.15.5<br/>
+Parsing documentation for highline-1.6.19<br/>
+Installing ri documentation for highline-1.6.19<br/>
+Parsing documentation for net-ssh-2.7.0<br/>
+Installing ri documentation for net-ssh-2.7.0<br/>
+Parsing documentation for net-sftp-2.1.2<br/>
+Installing ri documentation for net-sftp-2.1.2<br/>
+Parsing documentation for net-scp-1.1.2<br/>
+Installing ri documentation for net-scp-1.1.2<br/>
+Parsing documentation for net-ssh-gateway-1.2.0<br/>
+Installing ri documentation for net-ssh-gateway-1.2.0<br/>
+Parsing documentation for capistrano-2.15.5<br/>
+Installing ri documentation for capistrano-2.15.5<br/>
+6 gems installed</p></blockquote>
+<p>Voilà, c&rsquo;était dur je sais, mais ça, c&rsquo;est fait!</p>
+<h2>Création du projet</h2>
+<p>Vous êtes donc, à ce stade, dans votre dossier &laquo;&nbsp;mechant&nbsp;&raquo; dans &laquo;&nbsp;Git Bash&nbsp;&raquo;. Nous allons, à présent, créer un fichier qui va vous permettre de configurer les paramètres nécessaires au déploiement. Facile, une ligne de commande:</p><pre><code>capify .</code></pre>
+<p>N&rsquo;oubliez pas le &laquo;&nbsp;.&nbsp;&raquo; 🙂 Voici ce que vous devriez voir:</p>
+<blockquote><p>[add] writing &lsquo;./Capfile&rsquo;<br/>
+[add] making directory &lsquo;./config&rsquo;<br/>
+[add] writing &lsquo;./config/deploy.rb&rsquo;<br/>
+[done] capified!</p></blockquote>
+<p>En d&rsquo;autres termes, cette commande va vous créer un fichier de config (config/deploy.rb) et un scénario de déploiement (Capfile). Pour cet article, nous nous intéresserons uniquement au fichier de configuration.</p>
+<p>&nbsp;</p>
+<h2>Configuration</h2>
+<p>Ouvrez le fichier config/deploy.rb avec votre éditeur de texte préféré (notepad par exemple). Effacez tout le contenu, nous allons procéder par étape.</p>
+<p>Tout d&rsquo;abord, ajoutons les informations pour la connexion au serveur distant:</p><pre><code>set :user, 'sshlogin' #Login ssh
+set :password, &quot;sshpassword&quot; #Mot de passe ssh</code></pre>
+<p>Je pense que tout ca est très clair 🙂</p>
+<p>Passons à la configuration de git:</p><pre><code>set :scm, 'git' #Quel type de repository j'utilise. 
+set :repository,  'https://github.com/Nikoms/deployme.git' #Adresse de mon repository
+set :branch, 'master' #Branche à utiliser (pas obligatoire, master par défaut)
+set :deploy_to, '/home/sshlogin/deploy' #Dossier où l'on va déployer les fichiers 
+set :deploy_via, :copy #Comment déployer les fichiers.</code></pre>
+<p>Capistrano ne fonctionne pas qu&rsquo;avec git. Vous pouvez aussi déployer avec SVN, mercurial, etc&#8230; ou même sans repository!</p>
+<p>La variable &laquo;&nbsp;deploy_via&nbsp;&raquo; est interessante, car elle vous permet  de déployer votre application de plusieurs manières différentes:</p>
+<ul>
+<li>:<strong>copy</strong> : Fait un checkout en local (donc sous Windows), et envoi les fichiers (tar et gzipé) sur votre serveur distant. Pratique si votre serveur n&rsquo;a pas Git installé et que vous n&rsquo;avez pas la main dessus 🙂</li>
+<li>:<strong>checkout</strong> (pas défaut si vous n&rsquo;indiquez rien): Fait un clone sur le serveur distant. Il faut donc git installer sur celui-ci.</li>
+<li>:<strong>remote_cache</strong> : Fait un &laquo;&nbsp;fetch&nbsp;&raquo; plutot qu&rsquo;un &laquo;&nbsp;clone&nbsp;&raquo; sur le serveur distant. C&rsquo;est options est donc plus rapide que &laquo;&nbsp;:checkout&nbsp;&raquo;</li>
+</ul>
+<p>Passons aux rôles du/des serveurs:</p><pre><code>role :web, '192.168.1.100' #Mon serveur web.
+role :app, '192.168.1.100' #Mon serveur app. 
+role :db, '192.168.1.100', :primary =&gt; true #Mon serveur DB + Indication que c'est le master</code></pre>
+<p>Je n&rsquo;ai qu&rsquo;un seul serveur, les 3 adresses sont donc les mêmes. Vous pouvez avoir autant de serveur que vous le souhaitez</p>
+<ul>
+<li>web: Adresse du serveur web. Pour les sites à fort trafic, vous avez sans doute plusieurs serveurs derrière un load balancer</li>
+<li>app: Adresse du/des serveur(s) d&rsquo;application</li>
+<li>db: Adresse du serveur DB. Comme je n&rsquo;en ai qu&rsquo;un c&rsquo;est le master.</li>
+</ul>
+<p>Ces 3 variables sont obligatoires. Dans mon cas je n&rsquo;ai pas de serveur DB, mais j&rsquo;indique quand même l&rsquo;ip du serveur. Je n&rsquo;ai pas de migration de DB, donc de toute manière, aucune action ne sera exécutée.</p>
+<p>Le plus gros est fait. Mais il reste encore 2 variables que j&rsquo;aimerais vous présenter. Capistrano utilise beaucoup la commande &laquo;&nbsp;sudo&nbsp;&raquo; pour se mettre en &laquo;&nbsp;root&nbsp;&raquo;. Dans mon cas, je n&rsquo;ai pas accès à cette commande. Pas de soucis, ils ont prévu le coup, on rajoute une ligne:</p><pre><code>set :use_sudo, false #Je n'ai pas les droits pour faire du sudo</code></pre>
+<p>Dernière petite touche. En temps normal, Capistrano va faire un &laquo;&nbsp;touch&nbsp;&raquo; des dossiers &laquo;&nbsp;images&nbsp;&raquo;, &laquo;&nbsp;stylesheets&nbsp;&raquo; et &laquo;&nbsp;javascripts&nbsp;&raquo;. Comme je n&rsquo;en ai pas dans mon exemple, j&rsquo;ajoute cette ligne:</p><pre><code>set :normalize_asset_timestamps, false</code></pre>
+<p>Et voilà! C&rsquo;est tout, vous êtes prêt à faire du déploiement automatisé. Bien entendu, il existe d&rsquo;autres variables, en voici la liste: <a href="https://github.com/capistrano/capistrano/wiki/2.x-Significant-Configuration-Variables" class="external external_icon" target="_blank">https://github.com/capistrano/capistrano/wiki/2.x-Significant-Configuration-Variables</a></p>
+<p>&nbsp;</p>
+<h2>Place au déploiement!</h2>
+<p>La première fois que vous allez déployer votre application, il faut d&rsquo;abord que Capistrano crée une arborescence sur votre serveur distant. Dans &laquo;&nbsp;Git Bash&nbsp;&raquo;, vous allez donc exécuter ceci:</p><pre><code>cap deploy:setup</code></pre>
+<p>Ceci va créer cette structure de dossiers sur votre serveur:</p>
+<ul>
+<li>releases</li>
+<li>shared
+<ul>
+<li>log</li>
+<li>pids</li>
+<li>system</li>
+</ul>
+</li>
+</ul>
+<p>Le dossier &laquo;&nbsp;releases&nbsp;&raquo; contiendra toutes les versions de vos déploiements rangés par date/heure. Nous y reviendrons plus tard.<br/>
+Le dossier &laquo;&nbsp;shared&nbsp;&raquo; contiendra tout ce qui peut être partagé entre version, comme les logs, les fichiers uploadés par vos utilisateurs, etc&#8230;</p>
+<p>Nous allons à présent faire un petit &laquo;&nbsp;check&nbsp;&raquo; pour voir si Capistrano pense que notre déploiement va fonctionner. Il vérifie les droits, l&rsquo;existence de dossier, etc&#8230;</p><pre><code>cap deploy:check</code></pre>
+<p>Si vous avez le message &laquo;&nbsp;You appear to have all necessary dependencies installed&nbsp;&raquo;, c&rsquo;est que ca s&rsquo;annonce pas mal 🙂</p>
+<p>Essayons donc de déployer notre code, en n&rsquo;oubliant pas de croiser les doigts.</p><pre><code>cap deploy</code></pre>
+<p>Cette petite commande en appelle d&rsquo;autres:</p>
+<ul>
+<li>cap deploy:update_code :
+<ul>
+<li><strong>En local</strong> (parce que je l&rsquo;ai précisé avec la variable deploy_via), il clone votre repository dans un dossier temporaire.</li>
+<li>Compresse le dossier temporaire</li>
+<li>Upload le fichier compressé sur le serveur distant</li>
+<li>Décompresse le fichier dans le dossier &laquo;&nbsp;releases/<em>[YmdHis]</em>&nbsp;&raquo; (ex: 20110926162059 pour un déploiement à 16:20:59 le 16/09/2011) qui sera la release en cours.</li>
+</ul>
+</li>
+<li>cap deploy:finalize_update
+<ul>
+<li>crée les dossiers &laquo;&nbsp;log&nbsp;&raquo;, &laquo;&nbsp;public&nbsp;&raquo;, &laquo;&nbsp;tmp&nbsp;&raquo; dans votre release actuelle.</li>
+<li>C&rsquo;est ici que Capistrano fait un touch des assets (css, js, images) si vous n&rsquo;indiquez pas &laquo;&nbsp;<em>set :normalize_asset_timestamps, false</em>&laquo;&nbsp;.</li>
+</ul>
+</li>
+<li>cap deploy:create_symlink
+<ul>
+<li>Crée un lien symbolique&nbsp;&raquo;current&nbsp;&raquo;, au même niveau que &laquo;&nbsp;releases&nbsp;&raquo; et &laquo;&nbsp;shared&nbsp;&raquo;, vers la release en cours.</li>
+</ul>
+</li>
+<li>cap deploy:restart
+<ul>
+<li>Ne fait rien dans notre cas</li>
+</ul>
+</li>
+</ul>
+<p>Etant donné que c&rsquo;est notre premier déploiement, il faut encore créer un lien symbolique du dossier de notre site internet (ex: /home/monsiteInternet.com) vers le dossier &laquo;&nbsp;current&nbsp;&raquo; (/home/loginssh/deploy/current).  Pour tous vos prochains &laquo;&nbsp;deploy&nbsp;&raquo; , le lien symbolique de &laquo;&nbsp;current&nbsp;&raquo; se positionnera sur la bonne release, ce qui mettra votre site à jour automatiquement. Elle est pas belle la vie?</p>
+<p>Bien sûr, qui dit déploiement, dit &laquo;&nbsp;rollback&nbsp;&raquo;. En effet, tout ca c&rsquo;est génial, mais si vous remarquez que rien ne fonctionne comme il faut, il est nécessaire de pouvoir (vite) faire marche arrière. Rien de plus simple avec Capi&rsquo;, une ligne de code suffit:</p><pre><code>cap deploy:rollback</code></pre>
+<p>Avec cette commande, Capistrano va simplement changer le lien symbolique de &laquo;&nbsp;current&nbsp;&raquo; pour le placer sur la release précédente. Cela parait magique, mais comme toutes vos releases sont dans le dossier &laquo;&nbsp;releases&nbsp;&raquo;, et rangées par date, il peut facilement la retrouver.</p>
+<p>&nbsp;</p>
+<h2>Conclusion</h2>
+<p>Nous sommes en 2013 et mettre à jour un site n&rsquo;a plus rien de sorcier. Vous remarquez que cela peut aussi être fait sur<strong> un serveur qui n&rsquo;a ni Git, ni Ruby installé,</strong> et ce,<strong> sans les droits &laquo;&nbsp;root&nbsp;&raquo;</strong>. Tout cela en une ligne de commande avec un taux d&rsquo;erreur franchement très bas. Sans compter, le &laquo;&nbsp;rollback&nbsp;&raquo;, tout aussi simple, qui est un sacré filet de sécurité &laquo;&nbsp;au cas où&nbsp;&raquo;.</p>
+<p>Ce que je vous ai présenté n&rsquo;est que la partie émergée de l&rsquo;iceberg. Il y a un nombre incroyable de possibilités. En effet, vous pouvez à tout moment, lancer des lignes de commandes pendant la migration grâce aux &laquo;&nbsp;hooks&nbsp;&raquo;.</p>
+<p>Voici un petit exemple très basique: j&rsquo;aimerais créer un dossier &laquo;&nbsp;sql&nbsp;&raquo; juste après les opérations de &laquo;&nbsp;deploy:setup&nbsp;&raquo;, rien de plus simple, je rajoute ceci à mon fichier:</p><pre><code>after &quot;deploy:setup&quot;, :setup_mon_autre_dossier
+task :setup_mon_autre_dossier do
+  run &quot;mkdir sql&quot;
+end</code></pre>
+<p>Cela peut aller très loin, surtout qu&rsquo;il existe des extensions à la pelle.</p>
+<p>Je conseillerai à tout le monde d&rsquo;au moins commencer par le déploiement de code, même si vous n&rsquo;utilisez pas de système de versioning . Une fois que vous vous sentez à l&rsquo;aise, passez aux assets, à la migration de base de données, etc&#8230;</p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+</article>
+
+<footer>
+  <p>Originally published on <strong>Le méchant blog</strong> &mdash; <a href="../">from0</a></p>
+</footer>
+
+</body>
+</html>

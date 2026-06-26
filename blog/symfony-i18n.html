@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Symfony2: I18N dans les assets — Le méchant blog</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --text: #1a1a2e;
+    --accent: #4361ee;
+    --accent2: #3a0ca3;
+    --radius: 8px;
+    --code-bg: #1e1e2e;
+    --code-text: #cdd6f4;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.7; min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #fff; padding: 40px 20px 32px;
+  }
+  header nav { max-width: 780px; margin: 0 auto; }
+  header nav a {
+    color: #f59e0b; text-decoration: none; font-size: .9em; font-weight: 600;
+  }
+  header nav a:hover { color: #fbbf24; }
+  article {
+    max-width: 780px; margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  article h1 {
+    font-size: 2em; color: var(--accent2); margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .meta {
+    color: #666; font-size: .9em; margin-bottom: 32px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .tag {
+    display: inline-block; padding: 2px 10px;
+    border-radius: 12px; font-size: .8em; font-weight: 600;
+    background: #e8f4fd; color: #1a73e8;
+  }
+  article h2 {
+    font-size: 1.4em; margin: 32px 0 12px; color: var(--accent2);
+    border-bottom: 2px solid #e8e8e8; padding-bottom: 4px;
+  }
+  article h3 { font-size: 1.15em; margin: 24px 0 8px; }
+  article p { margin-bottom: 16px; }
+  article ul, article ol { margin: 0 0 16px 24px; }
+  article li { margin-bottom: 6px; }
+  article a { color: var(--accent); }
+  article img, article .article-img {
+    max-width: 100%; height: auto; border-radius: var(--radius);
+    margin: 8px 0;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 16px 20px; border-radius: var(--radius);
+    overflow-x: auto; margin: 16px 0 20px;
+    font-size: .88em; line-height: 1.5;
+  }
+  code {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+  :not(pre) > code {
+    background: #e8e8ee; padding: 2px 6px;
+    border-radius: 4px; font-size: .9em;
+  }
+  blockquote {
+    border-left: 4px solid var(--accent);
+    padding: 12px 16px; margin: 16px 0;
+    background: #f0f0ff; border-radius: 0 var(--radius) var(--radius) 0;
+    color: #444; font-style: italic;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 16px 0;
+  }
+  th, td {
+    padding: 8px 12px; text-align: left;
+    border-bottom: 1px solid #e0e0e0; font-size: .9em;
+  }
+  th { background: #f0f0f5; font-weight: 600; }
+  footer {
+    text-align: center; padding: 32px 20px;
+    font-size: .85em; color: #888;
+  }
+  footer a { color: var(--accent); }
+  @media (max-width: 600px) {
+    article h1 { font-size: 1.5em; }
+    article { padding: 24px 16px 60px; }
+    pre { font-size: .8em; padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <nav><a href="../">&larr; from0</a></nav>
+</header>
+
+<article>
+  <h1>Symfony2: I18N dans les assets</h1>
+  <div class="meta">
+    <span class="tag">Symfony</span>
+    <time datetime="2017-01-30">30 janvier 2017</time>
+  </div>
+
+  <p>Lorsque vous utilisez une librairie javascript, comme un date picker par exemple, il est bien souvent nécessaire de charger un fichier supplémentaire qui contient les traductions. Fort heureusement, ces fichiers sont nommés avec la « locale » (fr, nl, en, etc&#8230;), il est donc assez simple de les charger.</p><pre><code>{% javascripts '@AcmeFooBundle/Resources/public/datepicker/datepicker.js' %}
+    &lt;script type=&quot;text/javascript&quot; src=&quot;{{ asset_url }}&quot;&gt;&lt;/script&gt;
+{% endjavascripts %}
+
+&lt;script 
+  type=&quot;text/javascript&quot; 
+  src=&quot;{{ asset('bundles/acme/foo/datepicker/locales/i18n.' ~ app.request.locale ~ '.js') }}&quot;&gt;
+&lt;/script&gt;</code></pre>
+<p>Le problème, dans ce cas-ci, c&rsquo;est que 2 fichiers sont chargés séparément, alors qu&rsquo;on favorise plutôt la concaténation.</p>
+<p>On pourrait essayer de combiner les fichiers, mais ce n&rsquo;est pas <em>si </em>simple. Ce code, par exemple, donne l&rsquo;erreur suivante: Unexpected token « operator » of value « ~ ».</p><pre><code>{% javascripts 
+  '@AcmeFooBundle/Resources/public/datepicker/datepicker.js' 
+  'bundles/acme/foo/datepicker/locales/i18n.' ~ app.request.locale ~ '.js' 
+  combine=true 
+%}
+    &lt;script type=&quot;text/javascript&quot; src=&quot;{{ asset_url }}&quot;&gt;&lt;/script&gt;
+{% endjavascripts %}</code></pre>
+<p>Il existe, cependant, un moyen d&rsquo;utiliser des variables grâce à ces deux classes (je vous ai surligné les lignes importantes):</p>
+<ul>
+<li><a href="https://github.com/symfony/AsseticBundle/blob/master/DefaultValueSupplier.php#L40-L41" class="external external_icon" target="_blank"> AsseticBundle/DefaultValueSupplier</a></li>
+<li> <a href="https://github.com/symfony/AsseticBundle/blob/master/Twig/AsseticNode.php#L34" class="external external_icon" target="_blank">AsseticBundle/Twig/AsseticNode</a></li>
+</ul>
+<p>Comme vous pouvez le constater, <em>Assetic</em> gère deux variables par défaut: « locale » et « env ». Voyons comment on peut les utiliser&#8230;</p>
+<h2>Configuration</h2>
+<p>Tout d&rsquo;abord, il faut les spécifier dans le fichier <em>config.yml</em>, dans la partie <em>twig</em>:</p><pre><code>twig:
+    globals:
+        locales: [fr, nl, en]</code></pre>
+<p>Il est indispensable d&rsquo;indiquer <strong>toutes les valeurs possibles</strong> que pourrait avoir la variable au risque de reçevoir une grosse exception! Petit conseil pour la « locale », utilisez un paramètre (<em>%available_locales%</em> par exemple) dans votre <em>parameters.yml</em> afin de ne pas avoir à gérer la liste de vos locales dans plusieurs fichiers différents.</p>
+<p>On va ensuite indiquer à <em>Assetic</em> le même tableau de langues et empêcher l&rsquo;utilisation des controllers pour la génération des assets. Ce deuxième point est malheureusement indispensable.</p><pre><code>assetic:
+    debug:          &quot;%kernel.debug%&quot;
+    use_controller: false
+    variables:
+        locale:     [fr, nl, en]</code></pre>
+<p></p>
+<h2>Utilisation</h2>
+<p>Le plus dur est fait, vous pouvez maintenant combiner vos javascript classiques et « dynamiques » comme ceci:</p><pre><code>{% javascripts 
+  '@AcmeFooBundle/Resources/public/datepicker/datepicker.js' 
+  'bundles/acme/foo/datepicker/locales/i18n.{locale}.js' 
+  vars=['locale'] 
+  combine=true 
+%}
+    &lt;script type=&quot;text/javascript&quot; src=&quot;{{ asset_url }}&quot;&gt;&lt;/script&gt;
+{% endjavascripts %}</code></pre>
+<p></p>
+<ul>
+<li><em>{locale}</em> sera remplacer par la langue en cours</li>
+<li><em>vars</em> est utilisé pour indiquer à <em>Assetic</em> quelles variables il doit gérer dans sa liste d&rsquo;assets (souvenez-vous, il peut aussi gérer « env »)</li>
+</ul>
+<h2>Génération des fichiers</h2>
+<p>On a presque fini! Vu que, pour certains fichiers, on utilise le chemin direct (« bundles/acme/foo » au lieu de  « @AcmeFooBundle »), il faut lancer l&rsquo;installation de vos assets dans le dossier « /web »:</p><pre><code>php app/console assets:install</code></pre>
+<p>Il ne reste plus qu&rsquo;à générer les fichiers « à la main ». Cette commande va parcourir tous vos twigs et générer toutes les combinaisons possibles. Dans notre cas, 3 fichiers seront créés et contiendront chacun le datepicker avec la traduction.</p><pre><code>php app/console assetic:dump</code></pre>
+<p></p>
+<p class="lang:php decode:true ">En dev, il est préférable d&rsquo;utiliser un &#8211;watch si vous modifiez régulièrement un de ces fichiers.</p>
+<p></p><pre><code>php app/console assetic:watch</code></pre>
+<p></p>
+<h2>Customisation</h2>
+<p>Si « locale » et « env » ne vous suffisent pas, vous pouvez écrire vous-même votre classe qui gérera d&rsquo;autres variables. Pour cela rien de plus simple:</p>
+<ul>
+<li>Créez une classe qui implémente l&rsquo;interface « AsseticValueSupplierInterface ».</li>
+<li>Changer la classe de la clé « assetic.value_supplier.class » par la votre</li>
+</ul>
+<p></p><pre><code>&lt;parameter key=&quot;assetic.value_supplier.class&quot;&gt;Acme\FooBundle\MyValueSupplier&lt;/parameter&gt;</code></pre>
+<p>Et voilà le travail!</p>
+</article>
+
+<footer>
+  <p>Originally published on <strong>Le méchant blog</strong> &mdash; <a href="../">from0</a></p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOLID – O: Open/Closed — Le méchant blog</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --text: #1a1a2e;
+    --accent: #4361ee;
+    --accent2: #3a0ca3;
+    --radius: 8px;
+    --code-bg: #1e1e2e;
+    --code-text: #cdd6f4;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.7; min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #fff; padding: 40px 20px 32px;
+  }
+  header nav { max-width: 780px; margin: 0 auto; }
+  header nav a {
+    color: #f59e0b; text-decoration: none; font-size: .9em; font-weight: 600;
+  }
+  header nav a:hover { color: #fbbf24; }
+  article {
+    max-width: 780px; margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  article h1 {
+    font-size: 2em; color: var(--accent2); margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .meta {
+    color: #666; font-size: .9em; margin-bottom: 32px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .tag {
+    display: inline-block; padding: 2px 10px;
+    border-radius: 12px; font-size: .8em; font-weight: 600;
+    background: #e8f4fd; color: #1a73e8;
+  }
+  article h2 {
+    font-size: 1.4em; margin: 32px 0 12px; color: var(--accent2);
+    border-bottom: 2px solid #e8e8e8; padding-bottom: 4px;
+  }
+  article h3 { font-size: 1.15em; margin: 24px 0 8px; }
+  article p { margin-bottom: 16px; }
+  article ul, article ol { margin: 0 0 16px 24px; }
+  article li { margin-bottom: 6px; }
+  article a { color: var(--accent); }
+  article img, article .article-img {
+    max-width: 100%; height: auto; border-radius: var(--radius);
+    margin: 8px 0;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 16px 20px; border-radius: var(--radius);
+    overflow-x: auto; margin: 16px 0 20px;
+    font-size: .88em; line-height: 1.5;
+  }
+  code {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+  :not(pre) > code {
+    background: #e8e8ee; padding: 2px 6px;
+    border-radius: 4px; font-size: .9em;
+  }
+  blockquote {
+    border-left: 4px solid var(--accent);
+    padding: 12px 16px; margin: 16px 0;
+    background: #f0f0ff; border-radius: 0 var(--radius) var(--radius) 0;
+    color: #444; font-style: italic;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 16px 0;
+  }
+  th, td {
+    padding: 8px 12px; text-align: left;
+    border-bottom: 1px solid #e0e0e0; font-size: .9em;
+  }
+  th { background: #f0f0f5; font-weight: 600; }
+  footer {
+    text-align: center; padding: 32px 20px;
+    font-size: .85em; color: #888;
+  }
+  footer a { color: var(--accent); }
+  @media (max-width: 600px) {
+    article h1 { font-size: 1.5em; }
+    article { padding: 24px 16px 60px; }
+    pre { font-size: .8em; padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <nav><a href="../">&larr; from0</a></nav>
+</header>
+
+<article>
+  <h1>SOLID – O: Open/Closed</h1>
+  <div class="meta">
+    <span class="tag">SOLID</span>
+    <time datetime="2013-12-18">18 décembre 2013</time>
+  </div>
+
+  <p>Le deuxième principe de SOLID nous apprend qu’il faut être ouvert à l’extension mais fermé à la modification.</p>
+<p>Mais qu’est-ce que cela veut bien pouvoir dire ? Comment faire ? Est-ce que c’est possible ? Fermé aux modifications ? Cela veut dire que je ne vais plus modifier mon code ? Comme disait mon bon vieux binôme lors de mes études : Oui et non.</p>
+<h2>Oui… et non, mais pensez YAGNI et KISS!</h2>
+<p>En « open/closed », le code n’est modifié que lorsque votre client vient avec un nouveau type de demande. Qu’est-ce qu’un type de demande ? Prenons par exemple une méthode qui reçoit un « Xml » en paramètre. Votre client demande qu’il puisse donner un « Yaml » ou un « Csv ». Si vous commencez à écrire un « switch » sur le type de l’argument, qu&rsquo;il faut alimenter à chaque nouvelle demande, alors vous violez ce principe. Si, par contre, vous n’avez rien à changer, c’est gagné !</p>
+<p>Si votre client vient avec une nouvelle demande dont il en a le secret, du style : « Je veux que mon xml soit filtré, nettoyé et colorié en rouge », alors là, dans tous les cas, vous allez devoir modifier le code, faire des nouvelles méthodes, les appeler, etc…</p>
+<p>L’essentiel est de retenir ceci : Le principe « open/closed » se limite aux faits que vous auriez déjà pu rencontrer lors de vos développements. Et surtout, surtout, surtout (surtout !), n’essayez pas d’anticiper la demande du client. Pourquoi ? Tout d’abord, parce que cela alourdit votre code et votre architecture pour « rien », vu que pour le moment, on ne l’utilise pas. Ce qui vous fera peut-être perdre du temps lors de la modification du code. Ensuite, parce qu’il faut maintenir les tests unitaires pour ces cas-là (qu’on n’utilise pas). Et enfin, parce que le client a une sorte de sixième sens, et vous demandera toujours quelque chose que vous n’aviez pas prévu.</p>
+<p><i>KISS</i> (Keep it stupid simple) et <i>YAGNI</i> (You aint gonna need it) sont les maitres-mots même pour le principe « open/closed ».</p>
+<p>Ce qu’il ne faut pas perdre de vue, c’est que si le client demande une modification, c’est souvent le moment de refactoriser le code pour « préparer » les futures demandes du même type. La bonne blague ! Je vous dis de « préparer l’avenir » alors que 3 phrases plus haut, j’abordais <i>YAGNI</i> et <i>KISS</i> ? Laissez-moi une chance de m’expliquer ! La parole est à l’avocat de la couronne, c’est à vous, <a href="http://www.dailymotion.com/video/xax6o4_tribunal-du-peuple-2-de-francois-pe_fun" class="external external_icon" target="_blank">maitre <i>Sneyters</i></a>.</p>
+<h2>Comment ne pas procéder ?</h2>
+<p>Voici un bref résumé d’un mois de développement sur une application révolutionnaire : Le <i>File Importer 2000</i>. Le nom est un peu (beaucoup) <em>has-been</em>, mais que voulez-vous&#8230;</p>
+<ul>
+<li><span style="text-decoration: underline;"><strong>jour 0 : </strong></span>Votre client vous demande de prendre un csv sur un ftp distant pour l’importer dans votre application. Facile ! Votre classe se connectera sur un ftp, va récupérer le fichier distant afin de le mettre dans un dossier local. En code très simplifié, cela donne:</li>
+</ul>
+<p></p><pre><code>class FileImporter{
+
+    private $saveTo;
+    private $config;
+
+    public function __construct($saveTo, array $config)
+    {
+        $this-&gt;saveTo = $saveTo;
+        $this-&gt;config = $config;
+    }
+
+    public function import($file)
+    {
+        $connectionId = ftp_connect($this-&gt;config['server']);
+        ftp_login($connectionId, $this-&gt;config['user'], $this-&gt;config['password']);
+        $return = ftp_get($connectionId, $this-&gt;saveTo . DIRECTORY_SEPARATOR . $file, $file, FTP_BINARY);
+        ftp_close($connectionId);
+        return $return;
+    }
+}</code></pre>
+<p></p>
+<ul>
+<li><strong><span style="text-decoration: underline;">jour 14 :</span></strong> Vous avez fini et votre client vous dit qu’il se peut que le fichier ne soit plus sur un ftp, mais sur un compte dropbox. En bon exécutant, vous allez rajouter la notion de « dropbox » à côté du ftp.</li>
+</ul>
+<p></p><pre><code>class FileImporter{
+
+    private $saveTo;
+    private $config;
+
+    public function __construct($saveTo, array $config)
+    {
+        $this-&gt;saveTo = $saveTo;
+        $this-&gt;config = $config;
+    }
+
+    public function import($file, $isDropBox = false)
+    {
+        if($isDropBox){
+            return $this-&gt;downloadFromDropBox($file);
+        }
+        return $this-&gt;downloadFromFtp($file);
+    }
+
+    private function downloadFromFtp($file)
+    {
+        //...
+    }
+
+    private function downloadFromDropBox($file)
+    {
+        //...
+    }
+}</code></pre>
+<p>Pour éviter une trop forte régression, j&rsquo;indique que mon deuxième paramètre est optionnel. Cela m&rsquo;évite de changer les appelants.</p>
+<ul>
+<li><strong><span style="text-decoration: underline;">Jour 30 :</span></strong> Vos 2 types de récupération sont prêts et votre client vous dit qu’il est aussi possible qu’il le mette lui-même dans le dossier « /upload » de votre application. Pas bien grave, votre booléen se transforme en « int » sur lequel vous allez faire un switch pour savoir si on utilise le ftp, le compte dropbox ou le dossier « /upload ». Là, par contre, vous allez devoir modifier les appelants, c&rsquo;est-à-dire ceux qui utilisent l&rsquo;ancien système de booléen.</li>
+</ul>
+<p></p><pre><code>class FileImporter{
+
+    const IMPORT_FTP = 1;
+    const IMPORT_DROPBOX = 2;
+    const IMPORT_FILESYSTEM = 3;
+
+    private $saveTo;
+    private $config;
+
+    public function __construct($saveTo, array $config)
+    {
+        $this-&gt;saveTo = $saveTo;
+        $this-&gt;config = $config;
+    }
+
+    public function import($file, $type)
+    {
+        switch($type)
+        {
+            case self::IMPORT_FTP:
+                return $this-&gt;downloadFromFtp($file);
+                break;
+            case self::IMPORT_DROPBOX:
+                return $this-&gt;downloadFromDropBox($file);
+                break;
+            case self::IMPORT_FILESYSTEM:
+                return $this-&gt;downloadFromFileSystem($file);
+                break;
+            default:
+                throw new Exception('Wrong type');
+                break;
+        }
+    }
+
+    private function downloadFromFtp($file)
+    {
+        //...
+    }
+
+    private function downloadFromDropBox($file)
+    {
+        //...
+    }
+    private function downloadFromFileSystem($file)
+    {
+        //...
+    }
+}</code></pre>
+<p>&nbsp;</p>
+<p>Et voilà, après un mois tout va comme sur des roulettes ! Par contre, alors que la demande est toujours du même type, à savoir « Ajouter un nouveau type d’input », vous devez modifier votre méthode, et parfois le code qui l’appelle. En tant que développeur, vous savez que modifier du code, c’est s’exposer à des problèmes de différents types:</p>
+<ul>
+<li>problèmes de régression,</li>
+<li>problèmes de maintenance de tests unitaires,</li>
+<li>problèmes de « merge » de branches,</li>
+<li>etc.</li>
+</ul>
+<h2>Comment procéder ?</h2>
+<p>Reprenons l’énoncé en mode « open/closed ».</p>
+<ul>
+<li><span style="text-decoration: underline;"><strong>Jour 0:</strong></span> Création de la classe. Rien ne change par rapport à la version « not open/closed » étant donné qu’on est aussi en mode <i>KISS</i>, on ne va rien prévoir du tout. Le code reste donc exactement:</li>
+</ul>
+<p></p><pre><code>class FileImporter{
+
+    private $saveTo;
+    private $config;
+
+    public function __construct($saveTo, array $config)
+    {
+        $this-&gt;saveTo = $saveTo;
+        $this-&gt;config = $config;
+    }
+
+    public function import($file)
+    {
+        $connectionId = ftp_connect($this-&gt;config['server']);
+        ftp_login($connectionId, $this-&gt;config['user'], $this-&gt;config['password']);
+        $return = ftp_get($connectionId, $this-&gt;saveTo . DIRECTORY_SEPARATOR . $file, $file, FTP_BINARY);
+        ftp_close($connectionId);
+        return $return;
+    }
+}</code></pre>
+<p>&nbsp;</p>
+<ul>
+<li><span style="text-decoration: underline;"><strong>Jour 14:</strong></span> Ajout de « DropBox ». C’est là qu’il faut se poser la bonne question : On nous demande que l’input puisse être, soit un ftp soit un compte « dropbox ». Faisons preuve d’un peu d’<strong>abstraction</strong> (mot-clé), et utilisons l’<strong>injection de dépendance</strong> (encore un mot clé). Ainsi, nous allons créer une interface « InputStream » qui sera implémentée par les classes « Ftp » et « DropBox ».</li>
+</ul>
+<p style="padding-left: 30px;">Notre méthode se voit doté d&rsquo;un nouvel argument qui est un objet de type « InputStream ». Du coup, le code sera le même pour la classe « Ftp » et « DropBox » et ne sera plus modifié (<strong>fermé à la modification</strong>) tant que la demande ne change pas. De plus, elle fonctionnera avec d’autres types d’input qui implémente l&rsquo;interface « InputStream » (elle est <strong>ouverte à l’extension</strong>).</p>
+<p></p><pre><code>//Implémenté par les classes DropBox et Ftp
+interface InputStream
+{
+    public function getContent($file);
+}
+
+//Une classe pour la gestion de Ftp
+class FtpStream implements InputStream{
+    public function getContent($file){
+        //...
+    }
+}
+
+//Une classe pour la gestion de DropBox
+class DropBoxStream implements InputStream{
+    public function getContent($file){
+        //...
+    }
+}
+
+class FileImporter
+{
+    private $saveTo;
+
+    //Même plus besoin de config!
+    public function __construct($saveTo)
+    {
+        $this-&gt;saveTo = $saveTo;
+    }
+
+    public function import(InputStream $fileStream, $file)
+    {
+        file_put_contents($this-&gt;saveTo . DIRECTORY_SEPARATOR . $file, $fileStream-&gt;getContent($file));
+    }
+}</code></pre>
+<p></p>
+<p style="padding-left: 30px;">Bien sûr, cette modification de code, en engendre une autre: Les appelants. Souvenez-vous, on faisait la même chose en mode « not open/closed », mais 15 jours plus tard (le jour 30). Il y a donc des chances pour qu’il y ait moins de code impacté.</p>
+<ul>
+<li><span style="text-decoration: underline;"><strong>Jour 30:</strong></span> Ajout du dossier local : On crée juste une nouvelle classe « LocalFolder » qui implémente l’interface « InputStream » et qui représente un dossier local (« /upload » dans notre cas). Le code de ma méthode n’a pas été modifié, mes tests unitaires non plus. J’ai donc peu de chance d’avoir des problèmes de régression.</li>
+</ul>
+<p>Et voilà, notre classe répond bien au principe « open/closed » ! Cependant, comme je vous l’ai dit en début d’article, c’est « closed » uniquement sur ce qu’on connaît, car il est impossible d’anticiper les demandes d’un client… Il sera toujours plus malin que vous.</p>
+<h2>Dernier truc pour la route</h2>
+<p>Un petit truc, qui ne marche pas à tous les coups, mais qui peut vous aider : Lorsque le client vous demande d’<b><span style="text-decoration: underline;">ajouter</span></b> une fonctionnalité, mais que vous devez <b><span style="text-decoration: underline;">modifier</span></b> du code, c’est que votre code n’est peut-être pas si « open/closed ». Pour notre <i>File Importer 2000</i>, le client nous demande d’<b><span style="text-decoration: underline;">ajouter</span></b> différents types d’input possibles, il faut donc <b><span style="text-decoration: underline;">ajouter</span> </b>de nouvelles classes, il ne faut <b><span style="text-decoration: underline;">pas modifier</span></b> la méthode qui gère l&rsquo;import. « Add new feature » n’est pas « modify existing logic ».</p>
+<p>Ça vaut ce que ça vaut, mais ça ne coûte rien de se poser la question&#8230;</p>
+</article>
+
+<footer>
+  <p>Originally published on <strong>Le méchant blog</strong> &mdash; <a href="../">from0</a></p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOLID – I: Interface Segregation — Le méchant blog</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --text: #1a1a2e;
+    --accent: #4361ee;
+    --accent2: #3a0ca3;
+    --radius: 8px;
+    --code-bg: #1e1e2e;
+    --code-text: #cdd6f4;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.7; min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #fff; padding: 40px 20px 32px;
+  }
+  header nav { max-width: 780px; margin: 0 auto; }
+  header nav a {
+    color: #f59e0b; text-decoration: none; font-size: .9em; font-weight: 600;
+  }
+  header nav a:hover { color: #fbbf24; }
+  article {
+    max-width: 780px; margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  article h1 {
+    font-size: 2em; color: var(--accent2); margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .meta {
+    color: #666; font-size: .9em; margin-bottom: 32px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .tag {
+    display: inline-block; padding: 2px 10px;
+    border-radius: 12px; font-size: .8em; font-weight: 600;
+    background: #e8f4fd; color: #1a73e8;
+  }
+  article h2 {
+    font-size: 1.4em; margin: 32px 0 12px; color: var(--accent2);
+    border-bottom: 2px solid #e8e8e8; padding-bottom: 4px;
+  }
+  article h3 { font-size: 1.15em; margin: 24px 0 8px; }
+  article p { margin-bottom: 16px; }
+  article ul, article ol { margin: 0 0 16px 24px; }
+  article li { margin-bottom: 6px; }
+  article a { color: var(--accent); }
+  article img, article .article-img {
+    max-width: 100%; height: auto; border-radius: var(--radius);
+    margin: 8px 0;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 16px 20px; border-radius: var(--radius);
+    overflow-x: auto; margin: 16px 0 20px;
+    font-size: .88em; line-height: 1.5;
+  }
+  code {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+  :not(pre) > code {
+    background: #e8e8ee; padding: 2px 6px;
+    border-radius: 4px; font-size: .9em;
+  }
+  blockquote {
+    border-left: 4px solid var(--accent);
+    padding: 12px 16px; margin: 16px 0;
+    background: #f0f0ff; border-radius: 0 var(--radius) var(--radius) 0;
+    color: #444; font-style: italic;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 16px 0;
+  }
+  th, td {
+    padding: 8px 12px; text-align: left;
+    border-bottom: 1px solid #e0e0e0; font-size: .9em;
+  }
+  th { background: #f0f0f5; font-weight: 600; }
+  footer {
+    text-align: center; padding: 32px 20px;
+    font-size: .85em; color: #888;
+  }
+  footer a { color: var(--accent); }
+  @media (max-width: 600px) {
+    article h1 { font-size: 1.5em; }
+    article { padding: 24px 16px 60px; }
+    pre { font-size: .8em; padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <nav><a href="../">&larr; from0</a></nav>
+</header>
+
+<article>
+  <h1>SOLID – I: Interface Segregation</h1>
+  <div class="meta">
+    <span class="tag">SOLID</span>
+    <time datetime="2014-02-13">13 février 2014</time>
+  </div>
+
+  <p>Pour comprendre l’ <em>Interface Segregation</em>. Commençons par la définition de &laquo;&nbsp;ségrégation&nbsp;&raquo; trouvée dans le Larousse :</p>
+<blockquote>
+<p style="text-align: center;">« Action de mettre à part quelqu&rsquo;un, un groupe »</p>
+</blockquote>
+<p>Ou si l’on regarde la définition d’un point de vue technique:</p>
+<blockquote>
+<p style="text-align: center;"> « Séparation en amas distincts d&rsquo;un ensemble de corps différents préalablement mélangés. »</p>
+</blockquote>
+<p>Vous adaptez ceci à la programmation et plus spécifiquement aux interfaces, et je vous le donne dans le mile, la ségrégation c’est donc splitter une <i>Interface</i> en 2 (ou plus) si celle-ci prévoit trop de choses. Comment pourrait-on faire trop de choses si l&rsquo;on suit le premier principe de SOLID ? Suivez le guide!</p>
+<p>Pour comprendre ce principe, commençons par un classe native de php: <i>ArrayObject</i>. Lorsque vous étendez cette classe, vous pouvez déjà utiliser votre instance de plein de manière différentes: faire un <em>count, un <em>foreach, </em></em>le<em> sérialiser </em>et accéder à ses attributs comme un tableau. Jusque là, rien de choquant. Pourtant lorsqu&rsquo;on y regarde de plus près, cette classe étend quatre interfaces:  <em>IteratorAggregate</em>, <em>ArrayAccess</em>, <em>Serializable</em> et <em>Countable</em>. Que diriez vous de regrouper celles-ci pour n&rsquo;en faire plus qu&rsquo;une: <i>ArrayObjectInterface </i>? Bof&#8230; Quel est l’intérêt? Elle ferait sans doute &laquo;&nbsp;trop de choses&nbsp;&raquo;,  même si, au final, elle n&rsquo;a qu&rsquo;une responsabilité: Gérer un objet comme tableau.</p>
+<p>Dans ce cas-ci, nous avons fait le &laquo;&nbsp;chemin inverse&nbsp;&raquo; d&rsquo;une ségrégation d&rsquo;interface. Votre job consistera donc<strong> à couper une interface en petits morceaux. </strong>Un peu comme si monsieur PHP était parti de l&rsquo; <i>ArrayObjectInterface </i>pour arriver à <em>IteratorAggregate</em> , <em>ArrayAccess</em> , <em>Serializable </em>et <em>Countable</em>. L&rsquo;avantage est, bien entendu, de n&rsquo;étendre que le strict nécessaire. La ségrégation la plus extrême est de ne mettre qu’une seule méthode dans une interface, comme c’est le cas pour <i>Countable </i>par exemple.</p>
+<p>&nbsp;</p>
+<h2>Mais pourquoi fait-on cela ?</h2>
+<p>Prenons une interface <em>Contact</em> qui représente une personne qui a plusieurs informations basiques: Nom, prénom, e-mail, téléphone et adresse.</p><pre><code>interface Contact
+{
+    public function getEmail();
+    public function getFirstName();
+    public function getLastName();
+    public function getPhoneNumber();
+    public function getAddress();
+}</code></pre>
+<p>Ajoutons à cela une classe <em>PubSender</em> qui s&rsquo;occupera d&rsquo;envoyer des publicités (ou spams) à ces pauvres gens. Une méthode pour l&rsquo;envoi par sms, l&rsquo;autre pour les e-mails.</p><pre><code>//Code hypra simplifié
+class PubSender
+{
+
+    public function sendBySms(Contact $contact)
+    {
+        //Appel à une méthode privée qui envoi un sms via un webservice, etc...
+        return $this-&gt;sendSmsWithWebservice(
+            $contact-&gt;getPhoneNumber(), 
+            'Salut '.$contact-&gt;getFirstName().' Renvoyer &quot;Cool&quot; pour recevoir un milliard de dollars'
+        );
+    }
+    public function sendByMail(Contact $contact)
+    {
+        return mail(
+            $contact-&gt;getEmail(), 
+            &quot;Félicitations!&quot;, 
+            &quot;Cher client, Vous êtes notre 999.999.999 visiteur, cliquez ici pour gagner beaucoup d'argent&quot;
+        );
+    }
+}</code></pre>
+<p>Pour savoir si nous sommes dans le bon, posons nous une première question: Lorsque j’envoie un sms, ai-je vraiment besoin de toutes les méthodes de l’objet <em>Contact</em> ? Ai-je besoin que &laquo;&nbsp;mon contact&nbsp;&raquo; possède un e-mail, une adresse et un nom de famille?</p>
+<p>Biensûr que non! Pour l&rsquo;envoi d&rsquo;un sms, vous n&rsquo;avez besoin que d&rsquo;un numéro de téléphone et d&rsquo;un prénom. Le problème est le même pour l&rsquo;envoi d&rsquo;e-mail qui n&rsquo;a besoin que d&rsquo;un e-mail pour vivre.</p>
+<p>Ces méthodes ont donc trop de responsabilités car elle reçoivent de trop gros objets. Il est peut-être temps de diviser notre interface <em>Contact</em> même si elle parait déjà si petite.</p>
+<p>&nbsp;</p>
+<h2>Ségrégons !</h2>
+<p>Dans ce cas-ci,  l&rsquo;idée est de faire en sorte que lorsque l’on envoie un sms, on ne demande qu&rsquo;un objet qui ne contient que les méthodes que l’on va utiliser. Qu’à cela tienne, nous allons créer une interface <i>Smsable</i> qui représente une personne contactable par sms:</p><pre><code>interface Smsable
+{
+    public function getPhoneNumber();
+    public function getFirstName();
+}</code></pre>
+<p>Faisons de même pour les gens qui sont contactables par e-mail.</p><pre><code>interface Emailable
+{
+    public function getEmail();
+}</code></pre>
+<p>Mon utilisateur (ou contact) peut donc étendre ces 2 interfaces, et y ajouter d&rsquo;autres méthodes nécessaires.</p><pre><code>class User implements Smsable, Emailable
+{
+    public function getEmail()
+    {
+        return $this-&gt;email;
+    }
+
+    public function getFirstName()
+    {
+        return $this-&gt;firstName;
+    }
+
+    public function getPhoneNumber()
+    {
+        return $this-&gt;phoneNumber;
+    }
+
+    //Sans oublier les setter et les attributs de la classe 
+}</code></pre>
+<p>Refactorons dès lors notre classe <em>PubSender</em>.</p><pre><code>class PubSender
+{
+    public function sendByMail(Emailable $emailable)
+    {
+        return mail(
+            $emailable-&gt;getEmail(),
+            &quot;Venez acheter&quot;,
+            &quot;Cher client, Vous êtes notre 999.999.999 visiteur, cliquez ici pour gagner beaucoup d'argent&quot;
+        );
+    }
+
+    public function sendBySms(Smsable $smsable)
+    {
+        //Appel à une méthode privée qui envoi un sms via un webservice, etc...
+        $this-&gt;sendSmsWithWebservice(
+            $smsable-&gt;getPhoneNumber(),
+            'Salut ' . $smsable-&gt;getFirstName() . ' Renvoyez &quot;Cool&quot; pour recevoir un milliard de dollars'
+        );
+    }
+}</code></pre>
+<p>Comme vous pouvez le constater, seule la signature de la méthode change. Nous avons à présent des méthodes qui reçoivent des objets taillés sur-mesure pour la fonctionnalité.</p>
+<p>Une chose intéressante avec la ségrégation est que vous pouvez plus facilement <b>réutiliser</b> (décidément <span style="text-decoration: underline;">LE</span> maitre mot des principes SOLID) les classes. En effet, si les arguments des méthodes sont des interfaces simples, il sera beaucoup plus facile de les intégrer dans un autre projet. C’est aussi moins couteux d’implémenter les 2 méthodes de <i>Smsable</i> plutôt que les 5 méthodes de <i>Contact</i>. Ceci est d’autant plus vrai si 3 des 5 méthodes doivent rester vides car vous ne gérez pas les noms, prénoms et adresses postales. Souvenez-vous de ce que disait <a href="http://www.mechantblog.com/2013/12/solid-l-liskov-substitution/">Barbara Liskov</a>!</p>
+<p>&nbsp;</p>
+<h2>Autres avantages</h2>
+<p>En plus d’avoir des méthodes mieux définies, la ségrégation d’interface apporte aussi un autre avantage : Des <em>mock</em> plus simple pour les tests unitaires.</p>
+<p>Fini les grosses classes dont il ne faut <em>mocker</em> qu’une petite partie des méthodes. Mais d&rsquo;ailleurs, quelle partie ? Quelles méthodes ? Qui n&rsquo;a jamais été vérifier ce qui est réellement appelé pour savoir ce qui est utilisé (et donc ce qu&rsquo;il faut <em>mocker</em>)? Cela se passe bien moins souvent lorsque les interfaces sont plus petites, car tout, ou presque, est utilisé.</p>
+<p>Utiliser la ségrégation d’interface peut aussi aider à mieux diviser son code (et donc à atteindre/garder la <a href="http://www.mechantblog.com/2013/12/solid-single-responsability/">responsabilité unique</a>). En effet, une grosse interface &laquo;&nbsp;fourre-tout&nbsp;&raquo; est bien plus difficile à maintenir que plusieurs petites qui ont plusieurs avantages:</p>
+<ul>
+<li>Moins de tests unitaires par classe. En plus d&rsquo;être petites, on peut penser qu&rsquo;il y aura aussi moins de méthodes &laquo;&nbsp;interconnectées&nbsp;&raquo; entre elles.</li>
+<li>Moins de problèmes de régression car moins de méthodes donc moins de code impacté.</li>
+</ul>
+<p>Tout cela donne envie n&rsquo;est-ce pas?</p>
+<p>&nbsp;</p>
+<h2>Et si j’envoie un mail ET un sms ?</h2>
+<p>La partie simple était d’envoyer un e-mail <b><span style="text-decoration: underline;">ou</span></b> un sms. Mais que faire si vous devez envoyer une publicité à votre <em>User </em>sur les 2 supports <strong>simultanément </strong>(donc via une seule méthode).<em><br/>
+</em></p>
+<p><strong>Une première solution</strong> serait d&rsquo;abord de faire une nouvelle interface <em>Contactable</em> regroupant les deux interfaces et qui sera implémentée par <em>User.</em></p><pre><code>interface Contactable extends Emailable, Smsable
+{
+
+}
+class User implements Contactable
+{
+    //Les méthodes de base + tout ce qu'un utilisateur a besoin
+}</code></pre>
+<p>L&rsquo;envoi des publicités se fera alors en utilisant cette nouvelle interface</p><pre><code>class MultiPubSender1
+{
+    public function send(Contactable $contactable)
+    {
+        $this-&gt;sendByMail($contactable);
+        $this-&gt;sendBySms($contactable);
+    }
+
+    private function sendByMail(Emailable $emailable)
+    {
+        //...
+    }
+
+    private function sendBySms(Smsable $smsable)
+    {
+        //...
+    }
+}</code></pre>
+<p>Cette solution est viable. Son principal défaut est que vous vous trouvez avec une nouvelle interface qui ne fait rien d&rsquo;autre que représenter un ensemble d&rsquo;autres interfaces. Croisons les doigts pour qu&rsquo;elle ne grossisse pas trop, sinon vous devrez probablement la ségréguer à nouveau.</p>
+<p><strong>Une deuxième solution </strong>serait que votre classe <em>User </em>implémente les interfaces de base (<em>Smsable </em>et <em>Emailable</em>) sans passer par une interface intermédiaire. Rien d&rsquo;extraordinaire pour l&rsquo;instant.</p><pre><code>class User implements Smsable, Emailable
+{
+    //Les méthodes de base + tout ce qu'un utilisateur a besoin
+}</code></pre>
+<p>En écrivant la méthode &laquo;&nbsp;send&nbsp;&raquo;, vous vous dites logiquement que vous aurez besoin de 2 objets, car il y a deux supports: un objet <em>Smsable</em> et un <em>Emailable</em>.</p><pre><code>class MultiPubSender2
+{
+    public function send(Emailable $emailable, Smsable $smsable)
+    {
+        $this-&gt;sendByMail($emailable);
+        $this-&gt;sendBySms($smsable);
+    }
+
+    private function sendByMail(Emailable $emailable)
+    {
+        //...
+    }
+
+    private function sendBySms(Smsable $smsable)
+    {
+        //...
+    }
+}</code></pre>
+<p>Vous l&rsquo;avez certainement deviné, comme <em>User</em> étend ces 2 interfaces, on va devoir le passer deux fois à la méthode.</p><pre><code>$user = new User();
+$sender = new PubSender();
+$sender-&gt;send($user, $user);</code></pre>
+<p>Horreur et stupéfaction! Avant de vous précipiter sur la première solution, mettons les choses au clair.</p>
+<p><em>MultiPubSender</em> veut envoyer une publicité à deux supports différents. Elle n&rsquo;a clairement pas besoin de savoir si ceux-ci appartiennent à la même personne. Nous n&rsquo;avons donc aucune raison de changer sa signature, n&rsquo;est-ce pas? Pourquoi devrait-elle s&rsquo;adapter à <span style="text-decoration: underline;">votre</span> objet <em>User</em>?</p>
+<p>Oui, le monde est cruel car la même instance de <em>User</em> peut être vu de deux manières différentes (<em>Smsable </em>et <em>Emailable)</em><em></em>. Mais c&rsquo;est le problème de <em>User</em> (et le vôtre au passage) pas celui de <em>MultiPubSender</em>! L&rsquo;inconvénient de cette solution est donc évident: On passe plusieurs fois le même objet à une méthode. Comme on dit chez nous: &laquo;&nbsp;ça l&rsquo;fait pas!&nbsp;&raquo;. Par contre, vous laissez une porte ouverte pour le jour où les personnes de contact seront différentes (<a title="SOLID – O: Open/Closed" href="http://www.mechantblog.com/2013/12/solid-o-open-closed/">Open/Closed</a>).</p>
+<p>&nbsp;</p>
+<h2>Conclusion</h2>
+<p>La ségrégation d’interface est un chouette principe, si on ne tombe pas dans l’extrême. Si vous poussez le bouchon un peu trop loin, vous n’aurez que des interfaces à une méthode. C’est avec la pratique que vous allez apprendre à bien les utiliser. N’hésitez pas à tester vos connaissances, à vous tromper, refactorer (&lt;&gt; refacturer), re-essayer, etc. Débattez avec vos collègues sur les interfaces à créer ou modifier.</p>
+<p>Au début, cela peut sembler compliqué voire inutile pour ceux qui n’utilisent jamais d’interface, mais comme je l’ai déjà dit, elle pourra aussi vous aider à garder un code qui suit les principes de <a href="http://www.mechantblog.com/2013/12/solid-single-responsability/">responsabilité unique</a>. Comme quoi, tous les principes <i>SOLID</i> sont liés.</p>
+<p>Quant au dernier exemple, un peu tordu mais bien réel, il n’est pas si fréquent que cela. Je suis sûr que chacun trouvera le compromis qui lui convient le mieux : Que ce soit avec une des solutions évoquées ou avec du code supplémentaire comme des adaptateurs, convertisseurs, etc.</p>
+</article>
+
+<footer>
+  <p>Originally published on <strong>Le méchant blog</strong> &mdash; <a href="../">from0</a></p>
+</footer>
+
+</body>
+</html>
