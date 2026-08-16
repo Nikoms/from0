@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Local LLMs — Every Number on the Box, Explained — from0</title>
+<meta name="description" content="27B, Q4, 262k context, 936 GB/s, 35 tok/s… what the numbers around local AI models and graphics cards actually mean, with calculators you can play with.">
+<link rel="stylesheet" href="../micro-gpt/css/style.css">
+<style>
+  /* small additions on top of the shared course stylesheet */
+  .chip { display:inline-block; background:#f0f0ff; border:1px solid #d8d8f0; border-radius:12px; padding:2px 10px; margin:4px 6px 4px 0; font-size:.85em; }
+  .chip b { color: var(--accent2); }
+  .readout { margin-top:10px; }
+  .demo select { padding:4px 8px; border:1px solid #ccc; border-radius:4px; font-size:.85em; }
+  .demo .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin:6px 0; }
+  .demo .row label { min-width: 0; }
+  .fit-ok { color:#1a8a1a; font-weight:600; }
+  .fit-no { color:#c0392b; font-weight:600; }
+  .fit-meh { color:#b45309; font-weight:600; }
+  .bar { height:14px; background:#e8e8ee; border-radius:7px; overflow:hidden; margin:6px 0; }
+  .bar span { display:block; height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); }
+  .bar.over span { background:linear-gradient(90deg,#e67e22,#e74c3c); }
+  .kbd { font-family:'SF Mono','Fira Code',monospace; background:#e8e8ee; padding:1px 6px; border-radius:4px; font-size:.9em; }
+  .num-big { font-size:1.6em; font-weight:700; color:var(--accent2); }
+  .muted { color:#777; font-size:.85em; }
+  .glossary-grid { grid-template-columns: 1fr 1fr; }
+  @media (max-width:700px){ .glossary-grid { grid-template-columns:1fr; } }
+  #sidebar a.sub { padding-left:34px; font-size:.82em; }
+  .term { border-bottom:1px dotted var(--accent); cursor:help; text-decoration:none; color:inherit; }
+  .term:hover, .term:focus { background:#eef0ff; outline:none; }
+  #tip { position:fixed; z-index:1000; max-width:300px; background:#1e1e2e; color:#f0f0f5; padding:8px 11px; border-radius:6px; font-size:.82rem; line-height:1.4; box-shadow:0 4px 16px rgba(0,0,0,.25); pointer-events:none; display:none; }
+  #tip b { color:#a5b4fc; }
+</style>
+</head>
+<body>
+<button id="hamburger">&#9776;</button>
+<nav id="sidebar"></nav>
+<div class="progress-bar"><div class="fill"></div></div>
+<main id="content">
+
+<h1>Local LLMs — Every Number on the Box, Explained</h1>
+<p class="subtitle">
+  <span class="difficulty beginner">Beginner-friendly</span>
+  &nbsp; LLM = <em>Large Language Model</em>, the kind of AI behind ChatGPT or Claude. "Qwen3.8-27B, Q4_K_M, KV q8, 100k context, 35 tok/s on a 3090." By the end of this page you will be able to compute every one of those numbers yourself — and know which ones matter.
+</p>
+
+<div class="box info">
+  <strong>Who this is for.</strong>
+  You are a developer. You have heard you can run ChatGPT-like models on your own laptop or a graphics card, and you have opened one Reddit thread and closed it again because every sentence looked like
+  <code>UD-IQ3_XXS with KV q4 gets 20 t/s at 70k ctx on a 4070 Ti Super</code>.
+  This page decodes that sentence, one number at a time, with sliders you can drag. It starts from zero: §0 gives every word in one line, then each section builds on the previous one. No maths beyond multiplication and division.
+  If you want to know what happens <em>inside</em> the model, that's the <a href="../micro-gpt/index.html">MicroGPT course</a>. This page is about what happens <em>around</em> it: files, memory, speed, money.
+</div>
+
+<h2 id="s0">0. Start here — the vocabulary in one minute</h2>
+<p>Read this table once. Every row gets its own section afterwards, with numbers and a calculator; nothing beyond this table is assumed. Later on, every <span class="term" data-tip="Like this. Hover or tap a dotted word to see its one-line definition without scrolling.">dotted word</span> shows its definition on hover.</p>
+<table id="vocab">
+  <tr><th>Word</th><th>One line</th><th>Details</th></tr>
+  <tr><td><strong>Parameter</strong> (weight)</td><td>One of the numbers the model learned during training. <code>y = 0.7·x + 2.1</code> has two parameters (0.7 and 2.1); a model is the same idea with billions of them.</td><td><a href="#s1">§1</a></td></tr>
+  <tr><td><strong>27B</strong></td><td>27 billion parameters. Bigger = smarter, bigger file, slower.</td><td><a href="#s1">§1</a></td></tr>
+  <tr><td><strong>BF16, FP8, Q8, Q4, Q2</strong></td><td>The number = bits per parameter (16 bits = 2 bytes, 8 = 1, 4 = ½). <strong>BF</strong> = "brain float", a 16-bit decimal format; <strong>FP</strong> = "floating point"; <strong>Q</strong> = "quantized", i.e. rounded down to that many bits. Fewer bits = smaller and faster, slightly dumber.</td><td><a href="#s1">§1</a>, <a href="#s3">§3</a></td></tr>
+  <tr><td><strong>Quantization</strong></td><td>The act of shrinking parameters to fewer bytes (BF16 → Q4).</td><td><a href="#s3">§3</a></td></tr>
+  <tr><td><strong>MoE</strong> (Mixture of Experts), <strong>"A3B"</strong> (Active 3 Billion)</td><td>A model that only uses a slice of itself per word (3B active out of 35B). Fast.</td><td><a href="#s2">§2</a></td></tr>
+  <tr><td><strong>Token</strong></td><td>A word-piece, ~4 characters. Models read and write tokens, not words.</td><td><a href="#s4">§4</a></td></tr>
+  <tr><td><strong>Context window</strong> ("ctx")</td><td>How many tokens the model can see at once (prompt + files + conversation + answer).</td><td><a href="#s4">§4</a></td></tr>
+  <tr><td><strong>KV cache</strong> (Key/Value)</td><td>Memory the model keeps about every token in the context. Grows as you talk.</td><td><a href="#s5">§5</a></td></tr>
+  <tr><td><strong>Prefill / decode</strong></td><td>Reading your prompt / writing the answer. Two phases, two speeds.</td><td><a href="#s6">§6</a></td></tr>
+  <tr><td><strong>tok/s</strong> ("t/s")</td><td>Tokens per second when writing. 5 = painful, 30 = fine, 100 = fast.</td><td><a href="#s6">§6</a></td></tr>
+  <tr><td><strong>VRAM</strong> (Video RAM) / unified memory</td><td>The GPU's memory. Weights + KV cache must fit in it.</td><td><a href="#s7">§7</a></td></tr>
+  <tr><td><strong>Bandwidth</strong> (GB/s)</td><td>How fast the GPU can read its own memory. Sets tok/s.</td><td><a href="#s7">§7</a></td></tr>
+  <tr><td><strong>Thinking</strong></td><td>The model's hidden scratchpad before it answers. Costs tokens and time.</td><td><a href="#s8">§8</a></td></tr>
+</table>
+
+<h2 id="s1">1. A model is a big file of numbers</h2>
+
+<p>
+  A language model is not code. It is a huge table of numbers called <strong>parameters</strong> (or <strong>weights</strong>).
+  A parameter is one number that training adjusted: in the school formula <code>y = 0.7·x + 2.1</code>, 0.7 and 2.1 are the two parameters — change them and the line moves. A model is that formula scaled up: it takes the tokens so far as input, multiplies and adds them with its parameters, and outputs the probability of the next token.
+  When you read <strong>"Qwen3.8-27B"</strong>, the <strong>27B</strong> means <strong>27 billion parameters</strong> — a spreadsheet with 27,000,000,000 cells, none of which a human wrote by hand.
+  The <a href="../micro-gpt/index.html">MicroGPT</a> you built in Java had a few thousand. Same recipe, one million times bigger. "Qwen" is Alibaba's family of open models — the one that runs on your machine; the same page applies to Llama (Meta), Mistral, GLM, MiniMax, DeepSeek…
+</p>
+
+<p>
+  Every one of those numbers has to be stored somewhere. How many bytes each number takes is called its <strong>precision</strong>.
+  That's the first thing that decides whether a model fits on your machine. The names say it: <strong>BF16</strong> = <em>brain float</em>, 16 bits; <strong>FP8</strong> = <em>floating point</em>, 8 bits; <strong>Q4</strong> = <em>quantized</em> (rounded) to 4 bits. Divide bits by 8 to get bytes.
+</p>
+
+<div class="math-block">file size &nbsp;=&nbsp; parameters &nbsp;×&nbsp; bytes per parameter</div>
+
+<table>
+  <tr><th>Precision</th><th>Bytes / parameter</th><th>Qwen3.8-27B on disk</th><th>What it means</th></tr>
+  <tr><td><strong>BF16</strong> — brain float, 16 bits ("full precision")</td><td>2</td><td>~54 GB</td><td>How the model is trained and published. Reference quality.</td></tr>
+  <tr><td><strong>FP8</strong> — floating point, 8 bits</td><td>1</td><td>~27 GB</td><td>Half the size, practically no quality loss. Needs a recent GPU: NVIDIA RTX 40/50 series and PRO Blackwell, AMD RX 9000 / R9700. Not the RTX 3090, not Apple Silicon.</td></tr>
+  <tr><td><strong>Q8</strong> — quantized, 8 bits</td><td>~1.06</td><td>~29 GB</td><td>8-bit "quantized" — same idea as FP8 but runs everywhere (GGUF files). The extra 6 % is bookkeeping: one scale factor per block of 32 weights.</td></tr>
+  <tr><td><strong>Q6_K</strong> — quantized, 6 bits</td><td>~0.82</td><td>~22 GB</td><td>Nearly lossless.</td></tr>
+  <tr><td><strong>Q5_K_M</strong> — quantized, 5 bits</td><td>~0.72</td><td>~20 GB</td><td>Small loss.</td></tr>
+  <tr><td><strong>Q4_K_M</strong> ("Q4") — quantized, 4 bits</td><td>~0.60</td><td>~16 GB</td><td><strong>The sweet spot.</strong> Noticeable but small loss; what most people run.</td></tr>
+  <tr><td><strong>IQ3_XXS</strong> — importance-quantized, 3 bits</td><td>~0.39</td><td>~10.5 GB</td><td>Real loss. Chat is fine, agent reliability starts to crack.</td></tr>
+  <tr><td><strong>Q2_K</strong> — quantized, 2 bits</td><td>~0.35</td><td>~9.5 GB</td><td>"It runs" territory. Don't judge a model from a Q2.</td></tr>
+</table>
+
+<div class="demo">
+  <h4>Demo 1 — How big is a model file?</h4>
+  <div class="row">
+    <label>Parameters: <input type="range" id="d1p" min="1" max="500" value="27"> <b id="d1pv">27</b> B</label>
+    <label>Precision:
+      <select id="d1q">
+        <option value="2">BF16 (2 B/param)</option>
+        <option value="1">FP8 (1)</option>
+        <option value="1.06">Q8_0 (1.06)</option>
+        <option value="0.82">Q6_K (0.82)</option>
+        <option value="0.72">Q5_K_M (0.72)</option>
+        <option value="0.60" selected>Q4_K_M (0.60)</option>
+        <option value="0.39">IQ3_XXS (0.39)</option>
+        <option value="0.35">Q2_K (0.35)</option>
+      </select>
+    </label>
+  </div>
+  <div class="readout">
+    <span class="chip">file ≈ <b id="d1size">16.2</b> GB</span>
+    <span class="chip">= <b id="d1calc">27 × 0.60</b></span>
+  </div>
+  <div class="readout" id="d1fit"></div>
+</div>
+
+<div class="box tip">
+  <strong>Try this.</strong>
+  Set 27B and switch BF16 → Q4. The file drops from 54 GB to 16 GB — that's why a 27B model can run on a 24 GB graphics card, and why nobody runs BF16 at home.
+  Now drag to 400B at Q4: 240 GB. No consumer machine holds that. That's the line between "local" and "cloud", and it's drawn by this multiplication.
+</div>
+
+<h3>Decoding a model name</h3>
+
+<table>
+  <tr><th>You read</th><th>It means</th></tr>
+  <tr><td><code>Qwen3.8-27B</code></td><td>Family <em>Qwen</em>, generation <em>3.8</em>, <em>27 billion</em> parameters, <strong>dense</strong> (see §2).</td></tr>
+  <tr><td><code>Qwen3.6-35B-A3B</code></td><td>35B parameters in total, but only <strong>3B active</strong> per token — a <strong>Mixture of Experts</strong> (§2).</td></tr>
+  <tr><td><code>Q4_K_M</code>, <code>Q5_K_XL</code>, <code>IQ3_XXS</code></td><td>Quantization recipe (§3). First number = bits per weight. Letters = which flavour of rounding.</td></tr>
+  <tr><td><code>UD-…</code></td><td>"Unsloth Dynamic": important layers kept at higher precision, others lower. Better than plain quants at the same size.</td></tr>
+  <tr><td><code>i1-…</code>, <code>imatrix</code></td><td>Quantized using an "importance matrix" — measured which weights matter, protected those.</td></tr>
+  <tr><td><code>-Instruct</code>, <code>-Chat</code></td><td>Trained to follow instructions (what you want). A model without it is a raw text-completer.</td></tr>
+  <tr><td><code>abliterated</code>, <code>uncensored</code></td><td>Someone edited the weights to remove the model's tendency to refuse. Costs some intelligence. Pointless for coding.</td></tr>
+  <tr><td><code>.gguf</code></td><td>"GPT-Generated Unified Format": the file format for llama.cpp / Ollama / LM Studio. One file, everything inside.</td></tr>
+  <tr><td><code>.safetensors</code>, <code>MLX</code>, <code>NVFP4</code>, <code>AWQ</code> / <code>GPTQ</code></td><td>Other formats for other engines: safetensors = the raw published weights; MLX = Apple; NVFP4 = 4-bit for NVIDIA Blackwell; AWQ/GPTQ = 4-bit for vLLM on NVIDIA. Same weights, different packaging.</td></tr>
+</table>
+
+<h2 id="s2">2. Dense vs Mixture of Experts — why a bigger model can be faster</h2>
+
+<p>
+  Remember the one formula: speed depends on how many bytes the model must <em>read</em> per token.
+  A <strong>dense</strong> model uses every parameter for every token. Qwen3.8-27B at Q4 reads all 16 GB, for every single word it writes.
+</p>
+
+<p>
+  A <strong>Mixture of Experts</strong> (MoE) model is built differently. Its layers contain many small "experts", and a tiny <em>router</em> (a small learned layer inside the model) picks two or four of them per token.
+  Qwen3.6-<strong>35B-A3B</strong> has 35B parameters on disk but only <strong>3B are active</strong> for any given token. It reads about <strong>1/9th</strong> of the bytes a 27B dense model reads. In practice that buys 3–5× (not 9×): with so few bytes per token, other costs — attention, the KV cache, launching the GPU work — stop being negligible.
+</p>
+
+<div class="box tip">
+  <strong>Real-life analogy.</strong>
+  A dense model is a hospital where every doctor examines every patient. An MoE is a hospital with a receptionist who sends you to two specialists.
+  Much faster per patient — but you still need the whole building (all 35B must sit in memory), and two specialists know less than the whole staff put together.
+</div>
+
+<table>
+  <tr><th></th><th>Qwen3.8-27B (dense)</th><th>Qwen3.6-35B-A3B (MoE)</th></tr>
+  <tr><td>Size at Q4</td><td>~16 GB</td><td>~20 GB</td></tr>
+  <tr><td>Bytes read per token</td><td>~16 GB</td><td>~2 GB</td></tr>
+  <tr><td>Decode on a MacBook Air M4 (measured)</td><td>~9 tok/s</td><td>~30 tok/s</td></tr>
+  <tr><td>Decode on a Radeon R9700 (measured by others)</td><td>~30 tok/s</td><td>~130–156 tok/s</td></tr>
+  <tr><td>Coding skill (SWE-bench Pro, §9)</td><td><strong>61.7</strong></td><td>49.5</td></tr>
+</table>
+
+<p>
+  That table is the whole tension of running models at home: the MoE is fast enough to be pleasant, the dense one is smart enough to be useful, and no laptop gives you both.
+</p>
+
+<h2 id="s3">3. Quantization — smaller numbers, slightly worse answers</h2>
+
+<p>
+  Quantization means storing each parameter with fewer bits. Think of prices: <em>€12.47</em> (full precision) → <em>€12.50</em> (Q8) → <em>€12</em> (Q4) → <em>€10</em> (Q2).
+  The shop still works with rounded prices; it just gets a little less exact with every step.
+</p>
+
+<div class="columns">
+  <div class="col">
+    <h4>What you gain</h4>
+    <p>Smaller file → fits on smaller cards → fewer bytes per token → <strong>faster</strong>. Q4 is 3.3× smaller and 3.3× faster than BF16.</p>
+  </div>
+  <div class="col">
+    <h4>What you lose</h4>
+    <p>Accuracy. Q8 ≈ nothing. Q4 ≈ a point or two on benchmarks. Q3 ≈ visible. Q2 ≈ a different, dumber model wearing the same name.</p>
+  </div>
+</div>
+
+<div class="box warn">
+  <strong>The benchmark trap.</strong>
+  Every score you read on a model card ("SWE-bench Pro 61.7") was measured at full precision. The Q4 you download is a bit below that; the Q2 that "runs on my 16 GB card" is well below it.
+  When someone says "27B beats Opus 4.6 on my laptop", ask what quant.
+</div>
+
+<div class="box info">
+  <strong>The letters after the number.</strong>
+  <code>K_S</code> / <code>K_M</code> / <code>K_L</code> / <code>K_XL</code> = small/medium/large/extra-large variants of the same bit-width (more letters = more layers kept precise, slightly bigger file). <code>IQ</code> = a different, denser packing format — smaller for the same quality, slower to decode. Any quant (K or IQ) can be built "with imatrix" (<code>i1-</code>): the packer measured which weights matter and protected those.
+  <code>_0</code> / <code>_1</code> = older simple recipes. Rule of thumb: <b>Q4_K_M or UD-Q4_K_XL</b> unless you have a reason.
+</div>
+
+<p>
+  One more thing can be quantized: the <strong>KV cache</strong> (§5). "KV q8" is nearly free. "KV q4" saves memory but hurts the model's memory of long conversations. Use q8.
+</p>
+
+<h2 id="s4">4. Tokens and the context window</h2>
+
+<p>
+  Models don't read letters or words; they read <strong>tokens</strong> — chunks of text from a fixed vocabulary (the <a href="../micro-gpt/chapters/walkthrough.html">walkthrough bonus section</a> explains why).
+  Rules of thumb for English: <strong>1 token ≈ 4 characters ≈ ¾ of a word</strong>. Code is denser: 1 token ≈ 3 characters. French ≈ 3.5.
+</p>
+
+<p>
+  The <strong>context window</strong> is the maximum number of tokens the model can look at in one go: your instructions + the files you pasted + the conversation so far + the model's own thinking (§8) + its answer.
+  Qwen3.8-27B advertises <strong>262,144 tokens</strong> ("262k") — roughly 200,000 words, two novels. Once the window is full, the oldest part falls off (or the tool refuses).
+</p>
+
+<div class="demo">
+  <h4>Demo 2 — How many tokens is that?</h4>
+  <div class="row">
+    <label>Characters: <input type="range" id="d2c" min="1000" max="2000000" step="1000" value="200000"> <b id="d2cv">200,000</b></label>
+    <label>Kind:
+      <select id="d2k">
+        <option value="4">English prose (4 chars/token)</option>
+        <option value="3.5">French (3.5)</option>
+        <option value="3" selected>Source code (3)</option>
+      </select>
+    </label>
+  </div>
+  <div class="readout">
+    <span class="chip">≈ <b id="d2t">66,667</b> tokens</span>
+    <span class="chip">≈ <b id="d2f">1,667</b> files of 120 lines</span>
+    <span class="chip">fills <b id="d2p">25%</b> of a 262k window</span>
+  </div>
+</div>
+
+<div class="box tip">
+  <strong>Why coding agents eat context.</strong>
+  A coding agent (Claude Code, OpenCode…) doesn't send one question. It sends the system prompt, the tool descriptions, every file it opened, every command output, and the whole conversation — <em>every turn</em>.
+  A normal session sits at 30–100k tokens. That is why "can it do 100k context?" is the real question, not "can it run?".
+</div>
+
+<h2 id="s5">5. The KV cache — the memory that grows as you talk</h2>
+
+<p>
+  In the <a href="../micro-gpt/chapters/07-attention.html">attention chapter</a>, every token computed a Key ("what am I about") and a Value ("what I contribute") vector so later tokens could look back at it.
+  When a model generates text, it would be silly to recompute the Keys and Values of the whole conversation for every new token. So it stores them: that store is the <strong>KV cache</strong>.
+</p>
+
+<p>
+  It lives in the same GPU memory as the weights, and it grows with every token in the window:
+</p>
+
+<div class="math-block">KV cache &nbsp;=&nbsp; tokens in context &nbsp;×&nbsp; bytes per token</div>
+
+<p>
+  How many bytes per token depends on the architecture: number of layers × 2 (K and V) × how many attention heads keep a cache × head size × bytes per number.
+  You don't need to compute it; you need to know it varies <em>a lot</em>:
+</p>
+
+<table>
+  <tr><th>Model</th><th>KV per token</th><th>KV for 100k tokens</th><th>Why</th></tr>
+  <tr><td>Classic dense 32B (e.g. Qwen2.5-32B)</td><td>~256 KB (f16)</td><td>~25 GB</td><td>All 64 layers keep a full cache. Long context is very expensive.</td></tr>
+  <tr><td>Llama-3 70B</td><td>~320 KB (f16)</td><td>~31 GB</td><td>80 layers.</td></tr>
+  <tr><td><strong>Qwen3.8-27B</strong></td><td>~64 KB f16 / <strong>~35 KB q8</strong> / ~18 KB q4</td><td>6.4 / <strong>3.5</strong> / 1.8 GB</td><td>"Hybrid attention": only 16 of 64 layers keep a KV cache; the other 48 use a different mechanism (Gated DeltaNet) that keeps a fixed-size running summary instead of one entry per token — a running average instead of a full log. Long context is cheap.</td></tr>
+  <tr><td>Qwen3.6-35B-A3B</td><td>~25 KB f16 (est.)</td><td>~2.5 GB</td><td>Same hybrid trick, fewer layers.</td></tr>
+</table>
+
+<div class="demo">
+  <h4>Demo 3 — Weights + KV cache: does it fit?</h4>
+  <div class="row">
+    <label>Model:
+      <select id="d3m">
+        <option value="16|35|Qwen3.8-27B Q4, KV q8" selected>Qwen3.8-27B Q4 (16 GB), KV q8 (35 KB/tok)</option>
+        <option value="16|64|Qwen3.8-27B Q4, KV f16">Qwen3.8-27B Q4 (16 GB), KV f16 (64 KB/tok)</option>
+        <option value="22|35|Qwen3.8-27B Q6, KV q8">Qwen3.8-27B Q6 (22 GB), KV q8</option>
+        <option value="27|35|Qwen3.8-27B FP8, KV q8">Qwen3.8-27B FP8 (27 GB), KV q8</option>
+        <option value="20|25|Qwen3.6-35B-A3B Q4, KV f16">Qwen3.6-35B-A3B Q4 (20 GB), KV f16 (25 KB/tok)</option>
+        <option value="19|256|Classic dense 32B Q4, KV f16">Classic dense 32B Q4 (19 GB), KV f16 (256 KB/tok)</option>
+        <option value="40|320|Llama-3 70B Q4, KV f16">Llama-3 70B Q4 (40 GB), KV f16 (320 KB/tok)</option>
+      </select>
+    </label>
+  </div>
+  <div class="row">
+    <label>Context: <input type="range" id="d3c" min="4" max="262" value="100"> <b id="d3cv">100</b>k tokens</label>
+    <label>Card:
+      <select id="d3g"></select>
+    </label>
+  </div>
+  <div class="readout">
+    <span class="chip">weights <b id="d3w">16</b> GB</span>
+    <span class="chip">+ KV <b id="d3k">3.5</b> GB</span>
+    <span class="chip">+ overhead ~1.5 GB</span>
+    <span class="chip">= <b id="d3t">21</b> GB</span>
+  </div>
+  <div class="bar" id="d3bar"><span style="width:60%"></span></div>
+  <div class="readout" id="d3v"></div>
+</div>
+
+<div class="box tip">
+  <strong>Try this.</strong>
+  Keep Qwen3.8-27B Q4 / KV q8 and pick the RTX 3090 (24 GB): ~140k tokens fit. Pick the R9700 (32 GB): the <em>full 262k</em> fits. Now switch to "Classic dense 32B" — it dies under 10k. That single architecture change is why 2026 models can offer 262k windows on consumer cards and 2024 models couldn't.
+  Then pick the 4070 Ti Super (16 GB): nothing at Q4 fits, which is why its owners run Q2/Q3.
+</div>
+
+<h2 id="s6">6. Two speeds: prefill and decode</h2>
+
+<div class="box tip">
+  <strong>The one formula.</strong>
+  Everything you have read so far collapses into one line:
+  <div class="math-block">tokens per second &nbsp;≈&nbsp; memory bandwidth (GB/s) &nbsp;÷&nbsp; gigabytes the model must read to produce one token</div>
+  The rest of this section shows why, and §7 shows how to read that off a graphics-card spec sheet.
+</div>
+
+
+
+
+<p>
+  Generation happens in two phases, and they are limited by two different parts of your hardware.
+</p>
+
+<div class="columns">
+  <div class="col">
+    <h4>Prefill — reading your prompt</h4>
+    <p>All the prompt tokens are processed <strong>at once, in parallel</strong>. This is pure arithmetic: limited by <strong>compute</strong> (TFLOPS). Measured in tokens/s of <em>input</em>. Determines the <strong>time to first token</strong> (TTFT).</p>
+  </div>
+  <div class="col">
+    <h4>Decode — writing the answer</h4>
+    <p>One token at a time. For <em>every</em> token, the GPU must read <strong>all the active weights</strong> from memory once. Limited by <strong>memory bandwidth</strong> (GB/s). Measured in tokens/s of <em>output</em>. This is "the tok/s" people quote.</p>
+  </div>
+</div>
+
+<div class="math-block">decode tok/s &nbsp;≈&nbsp; bandwidth (GB/s) ÷ bytes read per token (GB) &nbsp;×&nbsp; ~0.65 (real-world efficiency)</div>
+
+<p>Worked example, Qwen3.8-27B at Q4 (16 GB read per token):</p>
+
+<table>
+  <tr><th>Machine</th><th>Bandwidth</th><th>Theory</th><th>Realistic</th><th>Measured</th></tr>
+  <tr><td>MacBook Air M4</td><td>120 GB/s</td><td>7.5</td><td>~5–6</td><td>5.7 (GGUF) / 9 (MLX, better kernels)</td></tr>
+  <tr><td>DGX Spark / ASUS GX10</td><td>273 GB/s</td><td>17</td><td>~11–13</td><td>—</td></tr>
+  <tr><td>Radeon AI PRO R9700</td><td>640 GB/s</td><td>40</td><td>~26</td><td>29–33 (Qwen3.5-27B)</td></tr>
+  <tr><td>RTX 3090</td><td>936 GB/s</td><td>58</td><td>~38</td><td>38 (vLLM INT4)</td></tr>
+  <tr><td>RTX 5090</td><td>1,792 GB/s</td><td>112</td><td>~70</td><td>~65–70 (measured at Q5, ~20 GB/token — Q4 would be a bit faster)</td></tr>
+</table>
+
+<p>The formula is not perfect (kernels and quant type shave a bit) but it puts you within 30 % every time — good enough to know whether a purchase makes sense. One refinement: each token also reads the KV cache (§5), so a 100k conversation on Qwen3.8-27B reads 16 + 3.5 GB per token and decodes ~20 % slower than an empty one. On classic dense models it is far worse. Demo 4 ignores this.</p>
+
+<div class="demo">
+  <h4>Demo 4 — How fast will it feel?</h4>
+  <div class="row">
+    <label>Card: <select id="d4g"></select></label>
+    <label>Bytes read per token: <input type="range" id="d4b" min="1" max="60" step="0.5" value="16"> <b id="d4bv">16</b> GB
+      <span class="muted">(dense: the whole file · MoE: only the active part, e.g. 35B-A3B Q4 ≈ 2 GB)</span></label>
+  </div>
+  <div class="row">
+    <label>Prompt to read first: <input type="range" id="d4c" min="1" max="200" value="60"> <b id="d4cv">60</b>k tokens</label>
+    <label>Answer length: <input type="range" id="d4o" min="100" max="4000" step="100" value="800"> <b id="d4ov">800</b> tokens</label>
+  </div>
+  <div class="readout">
+    <span class="chip">decode ≈ <b id="d4d">38</b> tok/s</span>
+    <span class="chip">prefill ≈ <b id="d4p">1,000</b> tok/s</span>
+    <span class="chip">wait before first word ≈ <b id="d4ttft">60 s</b></span>
+    <span class="chip">then the answer takes ≈ <b id="d4gen">21 s</b></span>
+  </div>
+  <div class="readout muted" id="d4note"></div>
+</div>
+
+<div class="box tip">
+  <strong>Try this.</strong>
+  Pick the MacBook Air and a 100k prompt. Prefill at ~40 tok/s means <b>40 minutes</b> before the first word. That's why "the model supports 262k" and "I can use 262k on my laptop" are different sentences — memory allows it, compute makes you wait.
+  Now switch to the 5090 and watch the same prompt drop to ~30 seconds. Then set bytes-per-token to 2 (an MoE like 35B-A3B): decode jumps 8×. That's §2 again.
+</div>
+
+<div class="box info">
+  <strong>Two tricks that bend the formula.</strong><br>
+  <b>Speculative decoding / MTP (multi-token prediction).</b> A tiny helper guesses the next 3 tokens; the big model verifies all 3 in one memory pass. When guesses are right (code: ~75 % of the time) you get 1.5–2.5× decode for free. Qwen3.8 ships this "MTP head" built in: an RTX 5090 goes from ~70 to ~148 tok/s on code with it. It needs good kernels — on Apple Metal it currently makes things <em>slower</em>.<br>
+  <b>Batching.</b> On one data-center GPU serving Qwen3.8-27B (vLLM), one user gets 226 tok/s; 16 users at once get 2,281 tok/s in total. The card was mostly waiting on memory; serving many people at once fills the gap. This is why renting a model per token is so cheap: you share the card.
+</div>
+
+<h2 id="s7">7. The three numbers of a graphics card</h2>
+
+<p>Marketing sheets list twenty specs. For running models, three matter, in this order:</p>
+
+<ol>
+  <li><strong>Memory size</strong> (GB of VRAM — <em>video RAM</em>, the graphics card's own memory — or "unified memory" on Macs / the DGX Spark) — decides <em>what fits</em>: weights + KV cache + ~1.5 GB overhead (§1, §5).</li>
+  <li><strong>Memory bandwidth</strong> (GB/s) — decides <em>decode speed</em> (§6). Not the number of "cores", not the clock: bandwidth.</li>
+  <li><strong>Compute</strong> (TFLOPS) — decides <em>prefill speed</em>, i.e. how long you wait on big prompts.</li>
+</ol>
+
+<table>
+  <tr><th>Machine</th><th>Memory</th><th>Bandwidth</th><th>Qwen3.8-27B Q4</th><th>Software</th><th>Price (Belgium, Aug 2026 — where I shop; US prices run ~20 % lower)</th></tr>
+  <tr><td>MacBook Air M4 32 GB</td><td>32 GB shared (~25 GB usable for the GPU)</td><td>120 GB/s</td><td>~9 tok/s, prefill ~40</td><td>Metal / MLX / llama.cpp</td><td>(already owned)</td></tr>
+  <tr><td>Mac mini M4 Pro 64 GB</td><td>64 GB shared</td><td>273 GB/s</td><td>~15</td><td>Metal / MLX</td><td>~€2,300</td></tr>
+  <tr><td>Used RTX 3090</td><td>24 GB</td><td>936 GB/s</td><td>~35 (85–100 with MTP)</td><td>CUDA</td><td>€750–1,350 second-hand</td></tr>
+  <tr><td>RTX 4070 Ti Super</td><td>16 GB</td><td>672 GB/s</td><td>Q4 doesn't fit; Q2/Q3 at 20–30</td><td>CUDA</td><td>—</td></tr>
+  <tr><td>Radeon AI PRO R9700</td><td>32 GB</td><td>640 GB/s</td><td>~30</td><td>ROCm / Vulkan</td><td>€1,549 new</td></tr>
+  <tr><td>RTX PRO 4000 Blackwell</td><td>24 GB</td><td>672 GB/s</td><td>~28</td><td>CUDA</td><td>€2,399 new</td></tr>
+  <tr><td>RTX 5090</td><td>32 GB</td><td>1,792 GB/s</td><td>~70 (~148 with MTP)</td><td>CUDA</td><td>€5,100–5,700 card only</td></tr>
+  <tr><td>NVIDIA DGX Spark / ASUS GX10</td><td>128 GB shared</td><td>273 GB/s</td><td>~12 — but runs a 122B MoE at ~50 tok/s</td><td>CUDA (ARM Linux)</td><td>€4,399</td></tr>
+</table>
+
+<div class="box tip">
+  <strong>Read the table with the formula.</strong>
+  The 3090 (2020, €800 used) beats the DGX Spark (2025, €4,399) by 3× on a 27B model — because 936 &gt; 273. The Spark wins only when the model is too big for 24 GB. Memory size decides <em>if</em>; bandwidth decides <em>how fast</em>. Don't pay for one when you need the other.
+</div>
+
+<h3>Unified memory vs a graphics card</h3>
+<p>
+  On a Mac or a DGX Spark, CPU and GPU share one pool ("unified memory"): a 32 GB Air can give ~25 GB to the model. On a PC, the model must fit in the <strong>graphics card's own memory (VRAM)</strong>;
+  what doesn't fit is "offloaded" to normal RAM and runs 10–20× slower over the PCIe cable. A 16 GB card running a 20 GB model is not "a bit slower" — it falls off a cliff.
+</p>
+
+<h3>The software layer</h3>
+<table>
+  <tr><th>Term</th><th>What it is</th></tr>
+  <tr><td><strong>CUDA</strong></td><td>NVIDIA's programming layer. Everything supports it first. The reason NVIDIA cards cost more.</td></tr>
+  <tr><td><strong>ROCm</strong> / <strong>Vulkan</strong></td><td>AMD's equivalents. In 2026 the mainstream tools (llama.cpp, Ollama, LM Studio, vLLM, PyTorch) work; niche projects often don't.</td></tr>
+  <tr><td><strong>Metal</strong> / <strong>MLX</strong></td><td>Apple's GPU layer and Apple's model framework. MLX is ~1.7× faster than the generic path on the same Mac.</td></tr>
+  <tr><td><strong>llama.cpp</strong></td><td>The C++ engine that runs GGUF files everywhere. The workhorse.</td></tr>
+  <tr><td><strong>Ollama</strong>, <strong>LM Studio</strong></td><td>Friendly wrappers around llama.cpp (Ollama also has an MLX path on Macs). <code>ollama run model</code> and you're talking.</td></tr>
+  <tr><td><strong>vLLM</strong>, <strong>SGLang</strong></td><td>Server engines built for many users at once, FP8/NVFP4, speculative decoding. More setup, more speed.</td></tr>
+</table>
+
+<div class="demo">
+  <h4>Demo 5 — Will it run, and how well?</h4>
+  <div class="row">
+    <label>Card: <select id="d5g"></select></label>
+    <label>Model:
+      <select id="d5m">
+        <option value="27|1|Qwen3.8-27B (dense)" selected>Qwen3.8-27B — dense, 27B active</option>
+        <option value="35|0.086|Qwen3.6-35B-A3B (MoE)">Qwen3.6-35B-A3B — MoE, 3B active</option>
+        <option value="80|0.0375|Qwen3-Coder-Next 80B-A3B (MoE)">Qwen3-Coder-Next 80B-A3B — MoE, 3B active</option>
+        <option value="122|0.082|Qwen3.5-122B-A10B (MoE)">Qwen3.5-122B-A10B — MoE, 10B active</option>
+        <option value="70|1|Llama-3 70B (dense)">Llama-3 70B — dense</option>
+        <option value="428|0.054|MiniMax M3 428B-A23B (MoE)">MiniMax M3 428B-A23B — MoE, 23B active</option>
+      </select>
+    </label>
+  </div>
+  <div class="row">
+    <label>Quant: <select id="d5q">
+      <option value="1">FP8 / Q8 (1 B/param)</option>
+      <option value="0.82">Q6_K</option>
+      <option value="0.60" selected>Q4_K_M</option>
+      <option value="0.39">IQ3_XXS</option>
+    </select></label>
+    <label>Context: <input type="range" id="d5c" min="4" max="262" value="64"> <b id="d5cv">64</b>k</label>
+  </div>
+  <div class="readout">
+    <span class="chip">needs <b id="d5need">—</b> GB</span>
+    <span class="chip">card has <b id="d5has">—</b> GB usable</span>
+    <span class="chip">decode ≈ <b id="d5spd">—</b> tok/s</span>
+  </div>
+  <div class="readout" id="d5v"></div>
+</div>
+
+<div class="box tip">
+  <strong>Try this.</strong>
+  DGX Spark + Qwen3.5-122B-A10B: fits (77 GB) and the formula says ~30 tok/s (owners measure ~50 with NVIDIA's tuned NVFP4 build) — that's the machine's sweet spot. Same model on a 3090: doesn't fit. Same Spark with Qwen3.8-27B: ~12 tok/s. Same 27B on the 3090: ~38.
+  Then try MiniMax M3 anywhere: 428B doesn't fit any single box. That's what "cloud-only model" means.
+</div>
+
+<h2 id="s8">8. Thinking, reasoning effort, sampling</h2>
+
+<p>
+  Modern models can <strong>think before answering</strong>: they write a hidden scratchpad ("let me check… actually…") and only then the answer. It makes them smarter on hard problems and slower on everything.
+  Those thinking tokens count against your context and your patience: one YouTuber let Qwen3.8-27B think for <strong>33 minutes</strong> on a logic puzzle.
+</p>
+
+<ul>
+  <li><strong>Reasoning effort</strong> (<code>low</code> / <code>medium</code> / <code>high</code>): how long it is allowed to think. For coding agents, <code>low</code> is usually right — the agent iterates anyway. Gotcha: in Ollama, Qwen3.8's default is the <em>highest</em> effort. Set it explicitly.</li>
+  <li><strong>Temperature</strong>: randomness. 0 = always the most likely token (deterministic, repetitive). 0.6–0.7 = normal. 1+ = creative / unstable. Use the model card's recommended value.</li>
+  <li><strong>top_k</strong>: only consider the K most likely next tokens. <strong>top_p</strong>: only the smallest set of tokens whose probabilities add up to p (e.g. 0.95). Both are guardrails on temperature. Again: model card values.</li>
+  <li><strong>System prompt</strong>: the instructions the tool sends before your message. In agents it is thousands of tokens — part of your context budget.</li>
+</ul>
+
+<h2 id="s9">9. Benchmarks — reading the scoreboard</h2>
+
+<table>
+  <tr><th>Benchmark</th><th>What it tests</th><th>Qwen3.6-35B-A3B</th><th>Qwen3.8-27B</th><th>Qwen3.8-Max (2.4T, cloud-only)</th><th>GLM-5.2 (744B, cloud-only)</th></tr>
+  <tr><td><strong>SWE-bench Pro</strong></td><td>Fix real GitHub issues in real repos, % solved. The one that matters for coding agents.</td><td>49.5</td><td><strong>61.7</strong></td><td>—</td><td>62.1</td></tr>
+  <tr><td><strong>Terminal-Bench 2.1</strong></td><td>Complete tasks in a shell (install, debug, script).</td><td>51.5</td><td><strong>73.0</strong></td><td>86.6</td><td>81.0</td></tr>
+  <tr><td><strong>LiveCodeBench v6</strong></td><td>Fresh competitive-programming problems.</td><td>80.4</td><td>90.3</td><td>—</td><td>—</td></tr>
+</table>
+<p class="muted">— = not published by the vendor.</p>
+
+<div class="box warn">
+  <strong>Three caveats, always.</strong>
+  (1) Vendor-reported until someone independent reproduces it. (2) Measured at full precision — your Q4 is a bit lower. (3) A 27B that scores like last year's frontier model is still a 27B: it knows less, it recovers from mistakes worse, it loses the thread on long tasks. Benchmarks say "can solve", not "pleasant to work with".
+</div>
+
+<h2 id="s10">10. Money — buying a card vs paying per token</h2>
+
+<p>
+  Cloud providers charge <strong>per million tokens</strong>, separately for <strong>input</strong> (what you send) and <strong>output</strong> (what it writes). Agents send the same context again and again; providers that <strong>cache</strong> it charge ~10 % for the repeated part.
+</p>
+
+<table>
+  <tr><th>Model (OpenRouter, Aug 2026)</th><th>Input $/M</th><th>Output $/M</th></tr>
+  <tr><td>Qwen3.6-35B-A3B</td><td>0.10</td><td>0.95</td></tr>
+  <tr><td>Qwen3.8-27B (launch price)</td><td>0.40–0.45</td><td>3.0–3.2</td></tr>
+  <tr><td>MiniMax M3 (428B)</td><td>0.30</td><td>1.20</td></tr>
+  <tr><td>Claude Sonnet 5</td><td>3.00</td><td>15.00</td></tr>
+  <tr><td>Claude Opus 5</td><td>5.00</td><td>25.00</td></tr>
+</table>
+
+<div class="demo">
+  <h4>Demo 6 — Per-token cloud vs buying hardware</h4>
+  <div class="row">
+    <label>Input tokens / day: <input type="range" id="d6i" min="1" max="500" value="230"> <b id="d6iv">230</b> M</label>
+    <label>Output tokens / day: <input type="range" id="d6o" min="0.1" max="10" step="0.1" value="1"> <b id="d6ov">1.0</b> M</label>
+  </div>
+  <div class="row">
+    <label>Cache hit on input: <input type="range" id="d6h" min="0" max="95" value="0"> <b id="d6hv">0</b> %</label>
+    <label>Days / month using it: <input type="range" id="d6d" min="1" max="30" value="12"> <b id="d6dv">12</b></label>
+  </div>
+  <div class="row">
+    <label>Model: <select id="d6m">
+      <option value="0.10|0.95|Qwen3.6-35B-A3B" selected>Qwen3.6-35B-A3B ($0.10 / $0.95)</option>
+      <option value="0.42|3.1|Qwen3.8-27B">Qwen3.8-27B ($0.42 / $3.10)</option>
+      <option value="0.30|1.20|MiniMax M3">MiniMax M3 ($0.30 / $1.20)</option>
+      <option value="3|15|Claude Sonnet 5">Claude Sonnet 5 ($3 / $15)</option>
+      <option value="5|25|Claude Opus 5">Claude Opus 5 ($5 / $25)</option>
+    </select></label>
+    <label>Hardware to compare: <select id="d6hw">
+      <option value="800|Used RTX 3090">Used RTX 3090 (€800)</option>
+      <option value="1549|Radeon R9700" selected>Radeon AI PRO R9700 (€1,549)</option>
+      <option value="2399|RTX PRO 4000">RTX PRO 4000 Blackwell (€2,399)</option>
+      <option value="4399|DGX Spark / GX10">DGX Spark / GX10 (€4,399)</option>
+      <option value="5600|RTX 5090 + PSU">RTX 5090 + PSU (€5,600)</option>
+    </select></label>
+  </div>
+  <div class="readout">
+    <span class="chip">cloud ≈ <b id="d6day">$—</b> / day</span>
+    <span class="chip">≈ <b id="d6mo">$—</b> / month</span>
+    <span class="chip">hardware pays back in <b id="d6be">—</b> months</span>
+  </div>
+  <div class="readout muted">Defaults = one heavy coding-agent user (measured from Claude Code logs: ~230 M context tokens and ~1 M generated tokens per working day). 230 M sounds absurd until you do §4: every agent turn re-sends the whole 60–100k context, and several agents in parallel make ~3,000 turns a day. Electricity ignored (~€10/month).</div>
+</div>
+
+<div class="box tip">
+  <strong>Try this.</strong>
+  Leave the defaults and switch the model to Claude Opus 5: ~$1,200/day. Now you know why subscriptions exist. Switch back to Qwen3.6-35B-A3B and slide cache hit to 90 %: a few dollars a day. Then compare with the R9700's price — about two years to pay back.
+  Hardware wins on privacy, on planes, and on "I already own it". It rarely wins on money for one person.
+</div>
+
+<h2 id="s11">11. Exam — decode three real sentences</h2>
+
+<p>These are real sentences from Reddit / X / vendor pages, the kind that made you close the tab. Each piece maps to one section above; the numbers are checkable with the calculators.</p>
+
+<h3>Sentence A — the one from the intro</h3>
+<div class="box info">
+  <strong>"UD-IQ3_XXS with KV q4 gets 20 t/s at 70k ctx on a 4070 Ti Super"</strong>
+  <em>(a Qwen3.8-27B user, in a YouTube comment)</em>
+</div>
+<table>
+  <tr><th>Piece</th><th>Means</th><th>Number</th></tr>
+  <tr><td><code>UD-</code></td><td>Unsloth Dynamic quant: important layers kept more precise (§1 name decoder).</td><td>—</td></tr>
+  <tr><td><code>IQ3_XXS</code></td><td>Importance-quantized, ~3 bits per parameter, smallest variant (§3).</td><td>27B × 0.39 ≈ <b>10.5 GB</b> file</td></tr>
+  <tr><td><code>KV q4</code></td><td>The KV cache stored in 4-bit (§5). Saves memory, hurts long-context recall.</td><td>~18 KB per token</td></tr>
+  <tr><td><code>70k ctx</code></td><td>Context window set to 70,000 tokens (§4).</td><td>70,000 × 18 KB ≈ <b>1.3 GB</b></td></tr>
+  <tr><td><code>4070 Ti Super</code></td><td>NVIDIA card with 16 GB VRAM, 672 GB/s (§7).</td><td>10.5 + 1.3 + 1.5 overhead ≈ <b>13.3 GB &lt; 16</b> ✔</td></tr>
+  <tr><td><code>20 t/s</code></td><td>Decode speed (§6). Formula: 672 ÷ 10.5 × 0.65 ≈ 42; IQ quants decode slower and 70k of KV is re-read every token → ~half.</td><td><b>~20 tok/s</b> ✔ plausible</td></tr>
+</table>
+<p>Translation: <em>"I squeezed the 27B into a 16 GB card by using a lossy 3-bit file and a 4-bit cache; it fits with 70k of context and writes at reading speed."</em> What it doesn't say: at IQ3 + KV q4 the model is noticeably dumber than the benchmark numbers (§3, §9).</p>
+
+<h3>Sentence B — a model too big for any box</h3>
+<div class="box info">
+  <strong>"GLM-5.2 (744B-A40B, MIT): needs 245 GB at 2-bit (lossy) or 372–475 GB at 4-bit."</strong>
+</div>
+<table>
+  <tr><th>Piece</th><th>Means</th><th>Number</th></tr>
+  <tr><td><code>GLM-5.2</code></td><td>Model family GLM (Zhipu AI), version 5.2 — an open model you can download.</td><td>—</td></tr>
+  <tr><td><code>744B</code></td><td>744 billion parameters in total (§1). 27× Qwen3.8-27B.</td><td>744 × 2 bytes = <b>1.5 TB</b> at BF16</td></tr>
+  <tr><td><code>A40B</code></td><td>Mixture of Experts: only 40 billion are <em>active</em> per token (§2). Reads like a 40B model, must be stored like a 744B one.</td><td>40B active → 40 × 0.6 ≈ 24 GB read per token at Q4</td></tr>
+  <tr><td><code>MIT</code></td><td>The license. MIT / Apache 2.0 = you may use it for anything, including commercially. Not a technical term.</td><td>—</td></tr>
+  <tr><td><code>2-bit (lossy)</code></td><td>Quantized to ~2 bits per parameter (§3). "Lossy" = the author warns quality drops noticeably (Q2 territory).</td><td>744 × 0.33 ≈ <b>245 GB</b> ✔</td></tr>
+  <tr><td><code>372–475 GB at 4-bit</code></td><td>Q4 range: pure 4-bit (0.5 B/param) to Q4_K_M (0.64 B/param).</td><td>744 × 0.5 = 372, 744 × 0.64 = 476 ✔</td></tr>
+</table>
+<p>Translation: <em>"Great open model, but even brutally compressed it needs 245 GB of memory; done properly, 400+ GB."</em> Nothing in §7 holds that except a Mac Studio with 512 GB (~€12,000) — and at 819 GB/s it would decode at 819 ÷ 24 × 0.65 ≈ 20 tok/s. Cloud-only for normal people, which is why it costs $/M tokens on OpenRouter instead.</p>
+
+<h3>Sentence C — the subtitle of this page</h3>
+<div class="box info">
+  <strong>"Qwen3.8-27B, Q4_K_M, KV q8, 100k context, 35 tok/s on a 3090."</strong>
+</div>
+<table>
+  <tr><th>Piece</th><th>Means</th><th>Number</th></tr>
+  <tr><td><code>Qwen3.8-27B</code></td><td>Alibaba's open model, generation 3.8, 27B parameters, dense.</td><td>—</td></tr>
+  <tr><td><code>Q4_K_M</code></td><td>4-bit quant, medium variant — the default choice (§3).</td><td>27 × 0.6 ≈ <b>16 GB</b></td></tr>
+  <tr><td><code>KV q8</code></td><td>Cache in 8-bit: near-free (§5).</td><td>35 KB/token</td></tr>
+  <tr><td><code>100k context</code></td><td>100,000 tokens of window (§4).</td><td>100,000 × 35 KB = <b>3.5 GB</b></td></tr>
+  <tr><td><code>3090</code></td><td>NVIDIA RTX 3090: 24 GB, 936 GB/s (§7).</td><td>16 + 3.5 + 1.5 = <b>21 GB &lt; 22.5</b> ✔</td></tr>
+  <tr><td><code>35 tok/s</code></td><td>Decode (§6): 936 ÷ 16 × 0.65 ≈ 38.</td><td><b>~35</b> ✔</td></tr>
+</table>
+<p>If you can now read those three without scrolling up, you're done. The last two sections are the lab and the cheat sheet.</p>
+
+<h2 id="s12">12. Play with the real thing (MacBook Air edition)</h2>
+
+<p>Everything above can be checked in ten minutes on the Air with <a href="https://ollama.com">Ollama</a> installed.</p>
+
+<pre><code><span class="cm"># 1. See what's on disk and how big (§1)</span>
+ollama list
+
+<span class="cm"># 2. Watch the memory split — weights + KV cache + overhead (§5)</span>
+ollama run qwen3.6:35b "hi" &gt; /dev/null; ollama ps
+
+<span class="cm"># 3. Measure decode and prefill yourself (§6) — 'eval rate' = decode, 'prompt eval rate' = prefill</span>
+ollama run qwen3.6:35b --verbose "Write a Python function that parses ISO-8601 durations."
+ollama run qwen3.8:27b-mlx --verbose "Write a Python function that parses ISO-8601 durations."
+
+<span class="cm"># 4. Same request through the API, with reasoning effort pinned to low (§8)</span>
+curl -s localhost:11434/api/generate -d '{
+  "model": "qwen3.8:27b-mlx", "think": "low", "stream": false,
+  "prompt": "Explain the KV cache in two sentences."
+}' | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["response"]); print("decode tok/s:", round(d["eval_count"]/d["eval_duration"]*1e9,1))'
+
+<span class="cm"># 5. Check how much memory the GPU is allowed to take (Apple unified memory, §7)</span>
+sysctl iogpu.wired_limit_mb</code></pre>
+
+<div class="box tip">
+  <strong>What you should see.</strong>
+  Step 3: the 35B-A3B (MoE) writes ~3× faster than the 27B (dense) even though its file is bigger — §2 in real life. Step 4: run it twice, once with <code>"think": "low"</code> and once without the field: the second one thinks for ages, because the default effort is the highest.
+  Feed a 10,000-word text as the prompt and watch <em>prompt eval rate</em> — that's the prefill wall from §6.
+</div>
+
+<h2 id="s13">13. Cheat sheet</h2>
+
+<div class="glossary-grid">
+  <div class="glossary-item" data-terms="parameter|parameters|weight|weights"><strong>Parameters / weights</strong><p>The numbers that make up the model. "27B" = 27 billion.</p></div>
+  <div class="glossary-item" data-terms="dense"><strong>Dense</strong><p>Every parameter is used for every token. Smart per GB, slow per token.</p></div>
+  <div class="glossary-item" data-terms="MoE|Mixture of Experts|A3B|A10B|A23B|A95B|experts"><strong>MoE, "A3B"</strong><p>MoE = Mixture of Experts, A3B = 3B Active; only the "active" part is read per token. Fast, needs the whole thing in memory.</p></div>
+  <div class="glossary-item" data-terms="BF16|FP8|INT4|NVFP4|Q8_0|Q8|Q6_K|Q5_K_XL|Q5_K_M|Q5|Q4_K_XL|Q4_K_M|Q4|IQ3_XXS|IQ|Q3|Q2_K|Q2|precision"><strong>BF16 / FP8 / Q8 / Q4 / Q2</strong><p>Bits per parameter (BF = brain float, FP = floating point, Q = quantized). Bytes: 2 / 1 / 1 / 0.6 / 0.35. Smaller = faster and dumber.</p></div>
+  <div class="glossary-item" data-terms="quantization|quantized|quantize|quant|quants"><strong>Quantization</strong><p>Storing weights with fewer bits. Q4_K_M is the default choice.</p></div>
+  <div class="glossary-item" data-terms="GGUF"><strong>GGUF</strong><p>"GPT-Generated Unified Format" — file format for llama.cpp / Ollama / LM Studio.</p></div>
+  <div class="glossary-item" data-terms="token|tokens"><strong>Token</strong><p>Chunk of text, ~4 characters. Models count everything in tokens.</p></div>
+  <div class="glossary-item" data-terms="context window|context|ctx"><strong>Context window</strong><p>Max tokens visible at once (262k for Qwen3.8). Costs memory via the KV cache.</p></div>
+  <div class="glossary-item" data-terms="KV cache|KV|Key/Value"><strong>KV cache</strong><p>KV = Key/Value. Stored attention Keys/Values for every token in context. Grows with context; ~35 KB/token on Qwen3.8-27B at q8.</p></div>
+  <div class="glossary-item" data-terms="prefill"><strong>Prefill</strong><p>Reading the prompt. Compute-bound. Sets time-to-first-token.</p></div>
+  <div class="glossary-item" data-terms="decode|decodes|decoding"><strong>Decode</strong><p>Writing the answer, one token at a time. Bandwidth-bound. "tok/s".</p></div>
+  <div class="glossary-item" data-terms="tok/s|t/s|tokens per second"><strong>tok/s</strong><p>Tokens per second. 5 = painful, 30 = fine for an agent, 100 = pleasant chat.</p></div>
+  <div class="glossary-item" data-terms="TTFT|time to first token"><strong>TTFT</strong><p>Time To First Token = prompt tokens ÷ prefill speed.</p></div>
+  <div class="glossary-item" data-terms="VRAM|unified memory"><strong>VRAM / unified memory</strong><p>Memory the model must fit in. Weights + KV + ~1.5 GB.</p></div>
+  <div class="glossary-item" data-terms="bandwidth|memory bandwidth|GB/s"><strong>Bandwidth (GB/s)</strong><p>How fast memory can be read. The number that sets decode speed.</p></div>
+  <div class="glossary-item" data-terms="offload|offloaded"><strong>Offload</strong><p>Putting part of the model in slow CPU RAM. 10–20× slower for that part.</p></div>
+  <div class="glossary-item" data-terms="MTP|speculative decoding|MTP head"><strong>MTP / speculative decoding</strong><p>MTP = Multi-Token Prediction. Guess-then-verify trick; 1.5–2.5× decode when it works (CUDA yes, Metal not yet).</p></div>
+  <div class="glossary-item" data-terms="batching|concurrency"><strong>Batching / concurrency</strong><p>Serving many requests at once. Why cloud tokens are cheap.</p></div>
+  <div class="glossary-item" data-terms="thinking|reasoning effort"><strong>Thinking / reasoning effort</strong><p>Hidden scratchpad before the answer. low/medium/high. Costs tokens and time.</p></div>
+  <div class="glossary-item" data-terms="temperature|top_p|top_k"><strong>Temperature, top_p</strong><p>Randomness knobs. Use the model card's values.</p></div>
+  <div class="glossary-item" data-terms="CUDA|ROCm|Metal|Vulkan"><strong>CUDA / ROCm / Metal</strong><p>NVIDIA / AMD / Apple GPU software layers. CUDA is supported first, everywhere.</p></div>
+  <div class="glossary-item" data-terms="llama.cpp|Ollama|MLX|vLLM|SGLang|LM Studio"><strong>llama.cpp, Ollama, MLX, vLLM</strong><p>Engines. Ollama = easy; MLX = fast on Macs; vLLM = servers.</p></div>
+  <div class="glossary-item" data-terms="SWE-bench Pro|Terminal-Bench|LiveCodeBench|benchmark|benchmarks"><strong>SWE-bench Pro / Terminal-Bench</strong><p>Coding-agent benchmarks. Vendor-reported, full precision.</p></div>
+  <div class="glossary-item" data-terms="$/M|per million tokens"><strong>$/M tokens</strong><p>Cloud price per million tokens, input and output priced separately; cached input ~10 %.</p></div>
+  <div class="glossary-item" data-terms="LLM|LLMs|language model"><strong>LLM / model</strong><p>Large Language Model: billions of learned numbers that predict the next token. Files you download, not programs.</p></div>
+  <div class="glossary-item" data-terms="Qwen|Llama|Mistral|GLM|MiniMax|DeepSeek|Kimi"><strong>Qwen, Llama, GLM, MiniMax…</strong><p>Families of open models you can download: Qwen (Alibaba), Llama (Meta), GLM (Zhipu), MiniMax, DeepSeek, Kimi (Moonshot). Claude / GPT are closed: cloud only.</p></div>
+  <div class="glossary-item" data-terms="GPU|graphics card|GPUs"><strong>GPU / graphics card</strong><p>Graphics Processing Unit: the chip built for millions of parallel multiplications — exactly what a model needs. Its own memory is the VRAM.</p></div>
+  <div class="glossary-item" data-terms="RTX|NVIDIA|AMD|Radeon|Apple Silicon"><strong>NVIDIA RTX, AMD Radeon, Apple Silicon</strong><p>The three GPU makers. RTX / RTX PRO = NVIDIA's consumer / workstation lines; Radeon = AMD; Apple Silicon = the M-series chips in Macs.</p></div>
+  <div class="glossary-item" data-terms="DGX Spark|GX10|Spark"><strong>DGX Spark / ASUS GX10</strong><p>NVIDIA's small desktop AI computer (128 GB unified memory, slow-ish bandwidth). GX10 is ASUS's version of the same design.</p></div>
+  <div class="glossary-item" data-terms="layer|layers"><strong>Layer</strong><p>One of the ~30–80 stacked processing stages inside a model; each token passes through all of them.</p></div>
+  <div class="glossary-item" data-terms="kernel|kernels"><strong>Kernel</strong><p>A small program that runs one operation on the GPU. "Better kernels" = the same maths done faster.</p></div>
+  <div class="glossary-item" data-terms="OpenRouter"><strong>OpenRouter</strong><p>A marketplace that sells access to many cloud-hosted models per token through one API.</p></div>
+  <div class="glossary-item" data-terms="PCIe|PSU"><strong>PCIe / PSU</strong><p>PCIe = the slot connecting a graphics card to the PC (slow compared to VRAM). PSU = power supply unit.</p></div>
+  <div class="glossary-item" data-terms="MIT|Apache 2.0|license|open model|open models|open-weight"><strong>MIT / Apache 2.0 (license)</strong><p>Open-source licenses on the model files: use, modify, sell — allowed. "Open model" = weights you can download; Claude/GPT are not.</p></div>
+  <div class="glossary-item" data-terms="lossy|lossless"><strong>Lossy / lossless</strong><p>Whether the compression changed the answers. Q8 ≈ lossless; Q2 = lossy: it runs, but it is measurably dumber.</p></div>
+  <div class="glossary-item" data-terms="TFLOPS"><strong>TFLOPS / compute</strong><p>Trillions of arithmetic operations per second. Sets prefill speed (reading your prompt).</p></div>
+  <div class="glossary-item" data-terms="hybrid attention|Gated DeltaNet"><strong>Hybrid attention / Gated DeltaNet</strong><p>Only some layers keep a per-token KV cache; the rest keep a fixed-size summary. Makes long context cheap (Qwen3.5+).</p></div>
+  <div class="glossary-item" data-terms="agent|coding agent|agents"><strong>Coding agent</strong><p>A tool (Claude Code, OpenCode…) that lets the model read files, run commands and iterate. Re-sends the whole context every turn.</p></div>
+</div>
+
+<div class="box info">
+  <strong>Where the numbers come from.</strong>
+  Measurements on a MacBook Air M4 32 GB (June–Aug 2026), public benchmarks of the RTX 3090 / 5090 / R9700 / DGX Spark by their owners, Qwen's model cards, OpenRouter and Belgian retailer prices on 16 Aug 2026.
+  Everything marked "~" or "est." is the formula, not a measurement. Prices and speeds move; the formulas don't.
+</div>
+
+<div class="page-nav">
+  <a class="prev" href="../index.html">from0 home</a>
+  <span></span>
+  <a class="next" href="../micro-gpt/index.html">MicroGPT course</a>
+</div>
+
+</main>
+
+<script>
+(function () {
+  // ── cards: [label, usable GB, bandwidth GB/s, prefill tok/s on 27B dense (est.)] ──
+  const CARDS = [
+    ['MacBook Air M4 32 GB',       25.5,  120,   40],
+    ['Mac mini M4 Pro 64 GB',      56,    273,   150],
+    ['Mac Studio M4 Max 128 GB',   115,   546,   300],
+    ['RTX 4070 Ti Super 16 GB',    15,    672,   900],
+    ['RTX 3090 24 GB',             22.5,  936,   1000],
+    ['RTX PRO 4000 Blackwell 24 GB', 22.5, 672,  1200],
+    ['Radeon AI PRO R9700 32 GB',  30,    640,   700],
+    ['RTX 5090 32 GB',             30,    1792,  3000],
+    ['DGX Spark / GX10 128 GB',    120,   273,   600],
+  ];
+  const EFF = 0.65, OVERHEAD = 1.5;
+  const $ = id => document.getElementById(id);
+  const fmt = (n, d=1) => Number(n).toLocaleString('en-US', {maximumFractionDigits: d});
+  const fillCards = (sel, def) => { CARDS.forEach((c,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=c[0]; if(i===def) o.selected=true; sel.appendChild(o); }); };
+
+  // ── sidebar from h2 ──
+  const sb = $('sidebar');
+  let html = '<div class="logo">Local LLMs<br><small>Every number explained</small></div><a href="../" class="home-link">&#8962; from0 Home</a><div class="section-label">Sections</div>';
+  document.querySelectorAll('main h2').forEach(h => { html += `<a href="#${h.id}">${h.textContent.replace(/^(\d+)\.\s*/, '<span class="ch">$1.</span>')}</a>`; });
+  sb.innerHTML = html;
+  $('hamburger').addEventListener('click', () => sb.classList.toggle('open'));
+  sb.addEventListener('click', e => { if (e.target.tagName === 'A') sb.classList.remove('open'); });
+  const fill = document.querySelector('.progress-bar .fill');
+  window.addEventListener('scroll', () => { const h = document.documentElement.scrollHeight - window.innerHeight; fill.style.width = h > 0 ? (window.scrollY / h * 100) + '%' : '0%'; });
+
+  // ── glossary tooltips: wrap first occurrence per block of every cheat-sheet term ──
+  const dict = [];
+  document.querySelectorAll('.glossary-item[data-terms]').forEach(g => {
+    const name = g.querySelector('strong').textContent.trim(), tip = g.querySelector('p').textContent.trim();
+    g.dataset.terms.split('|').forEach(t => dict.push({t, name, tip}));
+  });
+  dict.sort((a, b) => b.t.length - a.t.length);
+  const byKey = new Map(dict.map(d => [d.t.toLowerCase(), d]));
+  const esc = x => x.replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&');
+  const re = new RegExp('(?<![\\w$/])(' + dict.map(d => esc(d.t)).join('|') + ')(?![\\w/])', 'gi');
+  const SKIP = 'pre,code,h1,h2,h3,h4,a,.term,.glossary-grid,.demo,#vocab,.subtitle,select,label,button,.page-nav';
+  const tipEl = document.createElement('div'); tipEl.id = 'tip'; document.body.appendChild(tipEl);
+  const show = el => { tipEl.innerHTML = `<b>${el.dataset.name}</b> — ${el.dataset.tip}`; tipEl.style.display = 'block';
+    const r = el.getBoundingClientRect(), w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+    let x = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)), y = r.top - h - 8; if (y < 8) y = r.bottom + 8;
+    tipEl.style.left = x + 'px'; tipEl.style.top = y + 'px'; };
+  const hide = () => tipEl.style.display = 'none';
+  document.querySelectorAll('main p, main li, main td, main div.box').forEach(block => {
+    const seen = new Set();
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    const nodes = []; let n; while ((n = walker.nextNode())) nodes.push(n);
+    nodes.forEach(node => {
+      if (node.parentElement.closest(SKIP)) return;
+      const txt = node.nodeValue; if (!re.test(txt)) { re.lastIndex = 0; return; } re.lastIndex = 0;
+      const frag = document.createDocumentFragment(); let last = 0, m;
+      while ((m = re.exec(txt))) {
+        const d = byKey.get(m[1].toLowerCase()); if (!d || seen.has(d.name)) continue;
+        seen.add(d.name);
+        frag.appendChild(document.createTextNode(txt.slice(last, m.index)));
+        const sp = document.createElement('span'); sp.className = 'term'; sp.tabIndex = 0; sp.textContent = m[1];
+        sp.dataset.name = d.name; sp.dataset.tip = d.tip; frag.appendChild(sp); last = m.index + m[1].length;
+      }
+      if (!last) return;
+      frag.appendChild(document.createTextNode(txt.slice(last))); node.parentNode.replaceChild(frag, node);
+    });
+  });
+  document.querySelectorAll('.term').forEach(el => {
+    if (!el.dataset.name) { el.dataset.name = 'Tooltip'; }
+    el.addEventListener('mouseenter', () => show(el)); el.addEventListener('mouseover', () => show(el)); el.addEventListener('mouseleave', hide);
+    el.addEventListener('focus', () => show(el)); el.addEventListener('blur', hide);
+    el.addEventListener('click', e => { e.preventDefault(); show(el); });
+  });
+  document.addEventListener('scroll', hide, true);
+
+  // ── Demo 1: file size ──
+  function d1() {
+    const p = +$('d1p').value, b = +$('d1q').value, gb = p * b;
+    $('d1pv').textContent = p; $('d1size').textContent = fmt(gb); $('d1calc').textContent = `${p} × ${b}`;
+    $('d1fit').innerHTML = CARDS.map(c => `<span class="chip">${c[0].replace(/ \d+ GB$/,'')} <b class="${gb + OVERHEAD <= c[1] ? 'fit-ok' : 'fit-no'}">${gb + OVERHEAD <= c[1] ? 'fits' : 'no'}</b></span>`).join('');
+  }
+  ['d1p','d1q'].forEach(id => $(id).addEventListener('input', d1)); d1();
+
+  // ── Demo 2: tokens ──
+  function d2() {
+    const c = +$('d2c').value, k = +$('d2k').value, t = c / k;
+    $('d2cv').textContent = fmt(c,0); $('d2t').textContent = fmt(t,0);
+    $('d2f').textContent = fmt(c / (120*40), 0);
+    $('d2p').textContent = fmt(t / 262144 * 100, 0) + '%';
+  }
+  ['d2c','d2k'].forEach(id => $(id).addEventListener('input', d2)); d2();
+
+  // ── Demo 3: weights + KV ──
+  fillCards($('d3g'), 4);
+  function d3() {
+    const [w, kb] = $('d3m').value.split('|').map(Number);
+    const ctx = +$('d3c').value, card = CARDS[+$('d3g').value];
+    const kv = ctx * 1000 * kb / 1e6, total = w + kv + OVERHEAD;
+    $('d3cv').textContent = ctx; $('d3w').textContent = w; $('d3k').textContent = fmt(kv); $('d3t').textContent = fmt(total);
+    const pct = Math.min(100, total / card[1] * 100);
+    const bar = $('d3bar'); bar.className = 'bar' + (total > card[1] ? ' over' : ''); bar.firstElementChild.style.width = pct + '%';
+    let maxCtx = Math.max(0, Math.floor((card[1] - w - OVERHEAD) * 1e6 / kb / 1000));
+    $('d3v').innerHTML = total <= card[1]
+      ? `<span class="fit-ok">Fits</span> in ${card[0]} (${card[1]} GB usable). Max context on this card with this model: <b>~${fmt(Math.min(maxCtx,262),0)}k tokens</b>.`
+      : `<span class="fit-no">Doesn't fit</span> ${card[0]} (${card[1]} GB usable) — over by ${fmt(total - card[1])} GB. ${maxCtx > 4 ? `Max context here: <b>~${fmt(maxCtx,0)}k tokens</b>.` : 'The weights alone don\'t fit.'}`;
+  }
+  ['d3m','d3c','d3g'].forEach(id => $(id).addEventListener('input', d3)); d3();
+
+  // ── Demo 4: speed ──
+  fillCards($('d4g'), 4);
+  function d4() {
+    const card = CARDS[+$('d4g').value], bytes = +$('d4b').value, ctx = +$('d4c').value * 1000, out = +$('d4o').value;
+    const dec = card[2] / bytes * EFF;
+    const pre = card[3] * (16 / bytes) ** 0.5; // rough: fewer active bytes → faster prefill too, but not linearly
+    const ttft = ctx / pre, gen = out / dec;
+    $('d4bv').textContent = bytes; $('d4cv').textContent = ctx/1000; $('d4ov').textContent = out;
+    $('d4d').textContent = fmt(dec, 0); $('d4p').textContent = fmt(pre, 0);
+    $('d4ttft').textContent = ttft >= 90 ? fmt(ttft/60, 1) + ' min' : fmt(ttft, 0) + ' s';
+    $('d4gen').textContent = gen >= 90 ? fmt(gen/60, 1) + ' min' : fmt(gen, 0) + ' s';
+    $('d4note').textContent = dec < 10 ? 'Under 10 tok/s: chat only, painful for an agent.' : dec < 30 ? '10–30 tok/s: usable for an agent that spends most time in tools.' : dec < 80 ? '30–80 tok/s: comfortable.' : '80+ tok/s: faster than you read.';
+  }
+  ['d4g','d4b','d4c','d4o'].forEach(id => $(id).addEventListener('input', d4)); d4();
+
+  // ── Demo 5: will it run ──
+  fillCards($('d5g'), 4);
+  function d5() {
+    const card = CARDS[+$('d5g').value];
+    const [tot, act, name] = $('d5m').value.split('|'); const q = +$('d5q').value, ctx = +$('d5c').value;
+    const w = tot * q, kb = /A\d+B/.test(name) || /Qwen3\.8/.test(name) ? 35 : 256; // hybrid/MoE 2026 models ~35 KB q8; classic dense ~256
+    const kv = ctx * 1000 * kb / 1e6, need = w + kv + OVERHEAD, bytesTok = tot * act * q;
+    const dec = card[2] / bytesTok * EFF;
+    $('d5cv').textContent = ctx; $('d5need').textContent = fmt(need); $('d5has').textContent = card[1]; $('d5spd').textContent = need <= card[1] ? fmt(dec,0) : '—';
+    let v;
+    if (need > card[1]) v = `<span class="fit-no">Doesn't fit.</span> Weights ${fmt(w)} GB + KV ${fmt(kv)} GB + overhead. ${w + OVERHEAD + 4*35/1e3 <= card[1] ? 'Reduce context or quant.' : 'Not this card, at any context.'}`;
+    else if (dec < 10) v = `<span class="fit-meh">Fits, but ~${fmt(dec,0)} tok/s.</span> Chat only.`;
+    else if (dec < 30) v = `<span class="fit-ok">Fits, ~${fmt(dec,0)} tok/s.</span> OK for an agent, not snappy.`;
+    else v = `<span class="fit-ok">Fits, ~${fmt(dec,0)} tok/s.</span> Comfortable.`;
+    $('d5v').innerHTML = v + ` <span class="muted">(${name}, ${fmt(w)} GB weights, ${fmt(bytesTok)} GB read per token)</span>`;
+  }
+  ['d5g','d5m','d5q','d5c'].forEach(id => $(id).addEventListener('input', d5)); d5();
+
+  // ── Demo 6: money ──
+  function d6() {
+    const inp = +$('d6i').value, out = +$('d6o').value, hit = +$('d6h').value / 100, days = +$('d6d').value;
+    const [pi, po, mname] = $('d6m').value.split('|'); const [hw, hname] = $('d6hw').value.split('|');
+    const day = inp * ((1 - hit) * pi + hit * pi * 0.1) + out * po; const mo = day * days;
+    $('d6iv').textContent = inp; $('d6ov').textContent = fmt(out); $('d6hv').textContent = Math.round(hit*100); $('d6dv').textContent = days;
+    $('d6day').textContent = '$' + fmt(day, day < 10 ? 2 : 0); $('d6mo').textContent = '$' + fmt(mo, 0);
+    const be = mo > 0 ? hw / mo : Infinity; // € vs $ treated as ~equal
+    $('d6be').textContent = be > 120 ? '10+ years' : be > 24 ? fmt(be/12,1) + ' years' : fmt(be, 1);
+  }
+  ['d6i','d6o','d6h','d6d','d6m','d6hw'].forEach(id => $(id).addEventListener('input', d6)); d6();
+})();
+</script>
+</body>
+</html>
