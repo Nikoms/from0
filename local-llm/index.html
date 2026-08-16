@@ -724,14 +724,15 @@ sysctl iogpu.wired_limit_mb</code></pre>
   const byKey = new Map(dict.map(d => [d.t.toLowerCase(), d]));
   const esc = x => x.replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&');
   const re = new RegExp('(?<![\\w$/])(' + dict.map(d => esc(d.t)).join('|') + ')(?![\\w/])', 'gi');
-  const SKIP = 'pre,code,h1,h2,h3,h4,a,.term,.glossary-grid,.demo,#vocab,.subtitle,select,label,button,.page-nav';
+  const SKIP = 'pre,code,h1,h2,h3,h4,a,.term,#tip,.glossary-grid,#vocab td:first-child,select,button,input,.page-nav';
   const tipEl = document.createElement('div'); tipEl.id = 'tip'; document.body.appendChild(tipEl);
   const show = el => { tipEl.innerHTML = `<b>${el.dataset.name}</b> — ${el.dataset.tip}`; tipEl.style.display = 'block';
     const r = el.getBoundingClientRect(), w = tipEl.offsetWidth, h = tipEl.offsetHeight;
     let x = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)), y = r.top - h - 8; if (y < 8) y = r.bottom + 8;
     tipEl.style.left = x + 'px'; tipEl.style.top = y + 'px'; };
   const hide = () => tipEl.style.display = 'none';
-  document.querySelectorAll('main p, main li, main td, main div.box').forEach(block => {
+  const BLOCKS = 'main p, main li, main td, main th, main div.box, main .demo label, main .demo .readout';
+  const wrapBlock = block => {
     const seen = new Set();
     const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
     const nodes = []; let n; while ((n = walker.nextNode())) nodes.push(n);
@@ -749,14 +750,17 @@ sysctl iogpu.wired_limit_mb</code></pre>
       if (!last) return;
       frag.appendChild(document.createTextNode(txt.slice(last))); node.parentNode.replaceChild(frag, node);
     });
-  });
-  document.querySelectorAll('.term').forEach(el => {
-    if (!el.dataset.name) { el.dataset.name = 'Tooltip'; }
+  };
+  const bind = root => root.querySelectorAll('.term:not([data-bound])').forEach(el => {
+    el.dataset.bound = 1; if (!el.dataset.name) { el.dataset.name = 'Tooltip'; }
     el.addEventListener('mouseenter', () => show(el)); el.addEventListener('mouseover', () => show(el)); el.addEventListener('mouseleave', hide);
     el.addEventListener('focus', () => show(el)); el.addEventListener('blur', hide);
     el.addEventListener('click', e => { e.preventDefault(); show(el); });
   });
+  document.querySelectorAll(BLOCKS).forEach(wrapBlock); bind(document);
   document.addEventListener('scroll', hide, true);
+  // readouts are re-rendered by the demos → re-wrap on change (converges: wrapped text is skipped)
+  document.querySelectorAll('main .demo .readout').forEach(r => new MutationObserver(() => { wrapBlock(r); bind(r); }).observe(r, {childList: true, subtree: true}));
 
   // ── Demo 1: file size ──
   function d1() {
