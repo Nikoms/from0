@@ -129,6 +129,13 @@
   Now drag to 400B at Q4: 240 GB. No consumer machine holds that. That's the line between "local" and "cloud", and it's drawn by this multiplication.
 </div>
 
+<div class="box info">
+  <strong>"Open source" vs "open weight".</strong>
+  Qwen, Llama, GLM… are <strong>open-weight</strong>: the finished numbers are published, you download and run them.
+  True <strong>open source</strong> would also include the training code and the training data — the recipe, not just the cake. Almost no big model publishes those.
+  Day to day, what matters is the <em>license on the weights</em>: MIT / Apache 2.0 = use for anything, including commercially; Llama-style community licenses add conditions. Either way, "open" never means you could rebuild it — only that you can run it at home, which is what this page is about.
+</div>
+
 <h3>Decoding a model name</h3>
 
 <table>
@@ -147,7 +154,7 @@
 <h2 id="s2">2. Dense vs Mixture of Experts — why a bigger model can be faster</h2>
 
 <p>
-  Remember the one formula: speed depends on how many bytes the model must <em>read</em> per token.
+  Here is a fact that §6 will prove: a model's writing speed is set by how many bytes it must <em>read</em> per token. Hold onto that; for now, just count bytes.
   A <strong>dense</strong> model uses every parameter for every token. Qwen3.8-27B at Q4 reads all 16 GB, for every single word it writes.
 </p>
 
@@ -249,12 +256,16 @@
 <h2 id="s5">5. The KV cache — the memory that grows as you talk</h2>
 
 <p>
-  In the <a href="../micro-gpt/chapters/07-attention.html">attention chapter</a>, every token computed a Key ("what am I about") and a Value ("what I contribute") vector so later tokens could look back at it.
-  When a model generates text, it would be silly to recompute the Keys and Values of the whole conversation for every new token. So it stores them: that store is the <strong>KV cache</strong>.
+  The KV cache is the sticky notes the model writes about every token it has read — one note per token, so it never has to reread the whole conversation to produce the next word. More conversation, more notes; and the notes live in the same memory as the weights.
 </p>
 
 <p>
-  It lives in the same GPU memory as the weights, and it grows with every token in the window:
+  Where the notes come from: inside the model, every token computes a Key ("what am I about") and a Value ("what I contribute") vector so later tokens can look back at it — that's the <em>attention</em> mechanism (built by hand in the <a href="../micro-gpt/chapters/07-attention.html">attention chapter</a>, but you don't need it here).
+  Recomputing the Keys and Values of the whole conversation for every new token would be silly, so the model stores them: that store is the <strong>KV cache</strong>.
+</p>
+
+<p>
+  It lives in the same GPU memory as the weights, and it grows with every token in the window. It also gets <em>re-read</em> for every new token, so a big cache costs a little speed on top of memory — §6 puts a number on that.
 </p>
 
 <div class="math-block">KV cache &nbsp;=&nbsp; tokens in context &nbsp;×&nbsp; bytes per token</div>
@@ -332,9 +343,13 @@
   </div>
   <div class="col">
     <h4>Decode — writing the answer</h4>
-    <p>One token at a time. For <em>every</em> token, the GPU must read <strong>all the active weights</strong> from memory once. Limited by <strong>memory bandwidth</strong> (GB/s). Measured in tokens/s of <em>output</em>. This is "the tok/s" people quote.</p>
+    <p>One token at a time. To choose each next word, the model must skim its entire file of numbers once — <strong>all the active weights</strong>, read from memory, per token. Limited by <strong>memory bandwidth</strong> (GB/s): the skimming speed. Measured in tokens/s of <em>output</em>. This is "the tok/s" people quote.</p>
   </div>
 </div>
+
+<p>
+  Why the two phases hit two different limits: in prefill, all the prompt tokens go through together in one batch, so the weights are read <em>once</em> for thousands of tokens — arithmetic dominates. In decode, the answer comes one token at a time, so the weights are re-read for every single one — the memory fetch dominates and the arithmetic units mostly wait. (Keep that picture: it's also why the batching trick at the end of this section works.)
+</p>
 
 <div class="math-block">decode tok/s &nbsp;≈&nbsp; bandwidth (GB/s) ÷ bytes read per token (GB) &nbsp;×&nbsp; ~0.65 (real-world efficiency)</div>
 
@@ -377,6 +392,26 @@
   Now switch to the 5090 and watch the same prompt drop to ~30 seconds. Then set bytes-per-token to 2 (an MoE like 35B-A3B): decode jumps 8×. That's §2 again.
 </div>
 
+<div class="demo">
+  <h4>Demo 7 — Speed vs context: watch the lines die</h4>
+  <div class="row">
+    <label>Model:
+      <select id="c7m">
+        <option value="dense" selected>Qwen3.8-27B Q4 — dense, 16 GB read/token</option>
+        <option value="moe">Qwen3-Coder-Next 80B-A3B Q4 — MoE, 48 GB file, 1.8 GB read/token</option>
+      </select>
+    </label>
+  </div>
+  <div id="c7legend" class="readout"></div>
+  <svg id="c7svg" viewBox="0 0 680 300" role="img" aria-label="Decode speed versus context size per machine" style="width:100%;height:auto;background:#fcfcfb;border:1px solid #e1e0d9;border-radius:8px"></svg>
+  <div class="readout muted">Decode = bandwidth ÷ (bytes per token + KV re-read), KV q8. A line stops with ✕ where weights + KV no longer fit that machine's memory. Hover for exact numbers. MoE speeds are the formula's ceiling — real MoE gains are 3–5×, not 9× (§2).</div>
+</div>
+
+<div class="box tip">
+  <strong>Try this.</strong>
+  On the dense 27B, the RTX 3090's line dies at ~143k — that's Sentence C's card running out — while both Macs crawl on to the right edge. Now pick the 80B MoE: three lines vanish entirely and the €2,300 Mac mini is the only machine still drawing. Speed is the height of a line; <em>whether the line exists at all</em> is memory. §7 turns that into a map.
+</div>
+
 <div class="box info">
   <strong>Two tricks that bend the formula.</strong><br>
   <b>Speculative decoding / MTP (multi-token prediction).</b> A tiny helper guesses the next 3 tokens; the big model verifies all 3 in one memory pass. When guesses are right (code: ~75 % of the time) you get 1.5–2.5× decode for free. Qwen3.8 ships this "MTP head" built in: an RTX 5090 goes from ~70 to ~148 tok/s on code with it. It needs good kernels — on Apple Metal it currently makes things <em>slower</em>.<br>
@@ -408,6 +443,30 @@
 <div class="box tip">
   <strong>Read the table with the formula.</strong>
   The 3090 (2020, €800 used) beats the DGX Spark (2025, €4,399) by 3× on a 27B model — because 936 &gt; 273. The Spark wins only when the model is too big for 24 GB. Memory size decides <em>if</em>; bandwidth decides <em>how fast</em>. Don't pay for one when you need the other.
+</div>
+
+<div class="demo">
+  <h4>Demo 8 — The machine map: capacity vs speed</h4>
+  <div class="row">
+    <label>Model:
+      <select id="c8m">
+        <option value="q27" selected>Qwen3.8-27B Q4 (dense, 16 GB)</option>
+        <option value="q35">Qwen3.6-35B-A3B Q4 (MoE, 20 GB)</option>
+        <option value="q80">Qwen3-Coder-Next 80B-A3B Q4 (MoE, 48 GB)</option>
+        <option value="q122">Qwen3.5-122B-A10B Q4 (MoE, 73 GB)</option>
+      </select>
+    </label>
+  </div>
+  <svg id="c8svg" viewBox="0 0 680 330" role="img" aria-label="Machines plotted by memory and bandwidth" style="width:100%;height:auto;background:#fcfcfb;border:1px solid #e1e0d9;border-radius:8px"></svg>
+  <div class="readout muted">Every machine from the table, placed by its two numbers: right = more memory, up = more bandwidth (both log scales). <b>Filled dot = runs the chosen model</b> (decode speed shown); hollow = doesn't fit. Hover any dot for details.</div>
+</div>
+
+<div class="box info">
+  <strong>Why a Mac sometimes beats a 5090.</strong>
+  The map has two directions and every machine picks one. Graphics cards climb (huge bandwidth, small memory); Apple Silicon and the DGX Spark walk right (huge memory, modest bandwidth).
+  A model that fits both → the GPU wins by 6×, and it's not close.
+  A model — or a context, or three parallel sessions — that only fits unified memory → the Mac wins <em>by default</em>, because the GPU's score is zero (or the offload cliff).
+  Slide through the four models above and watch the filled dots migrate from the top-left to the bottom-right. Buy for the models you want to run: bandwidth if they fit, memory if they don't.
 </div>
 
 <h3>Unified memory vs a graphics card</h3>
@@ -664,7 +723,7 @@ sysctl iogpu.wired_limit_mb</code></pre>
   <div class="glossary-item" data-terms="kernel|kernels"><strong>Kernel</strong><p>A small program that runs one operation on the GPU. "Better kernels" = the same maths done faster.</p></div>
   <div class="glossary-item" data-terms="OpenRouter"><strong>OpenRouter</strong><p>A marketplace that sells access to many cloud-hosted models per token through one API.</p></div>
   <div class="glossary-item" data-terms="PCIe|PSU"><strong>PCIe / PSU</strong><p>PCIe = the slot connecting a graphics card to the PC (slow compared to VRAM). PSU = power supply unit.</p></div>
-  <div class="glossary-item" data-terms="MIT|Apache 2.0|license|open model|open models|open-weight"><strong>MIT / Apache 2.0 (license)</strong><p>Open-source licenses on the model files: use, modify, sell — allowed. "Open model" = weights you can download; Claude/GPT are not.</p></div>
+  <div class="glossary-item" data-terms="MIT|Apache 2.0|license|open model|open models|open-weight|open weight|open source|open-source"><strong>MIT / Apache 2.0 (license)</strong><p>Licenses on the weights: use, modify, sell — allowed. "Open-weight" = downloadable weights (Qwen, Llama; Claude/GPT are not); true "open source" would add training code + data — almost nobody does.</p></div>
   <div class="glossary-item" data-terms="lossy|lossless"><strong>Lossy / lossless</strong><p>Whether the compression changed the answers. Q8 ≈ lossless; Q2 = lossy: it runs, but it is measurably dumber.</p></div>
   <div class="glossary-item" data-terms="TFLOPS"><strong>TFLOPS / compute</strong><p>Trillions of arithmetic operations per second. Sets prefill speed (reading your prompt).</p></div>
   <div class="glossary-item" data-terms="hybrid attention|Gated DeltaNet"><strong>Hybrid attention / Gated DeltaNet</strong><p>Only some layers keep a per-token KV cache; the rest keep a fixed-size summary. Makes long context cheap (Qwen3.5+).</p></div>
@@ -839,6 +898,96 @@ sysctl iogpu.wired_limit_mb</code></pre>
     $('d6be').textContent = be > 120 ? '10+ years' : be > 24 ? fmt(be/12,1) + ' years' : fmt(be, 1);
   }
   ['d6i','d6o','d6h','d6d','d6m','d6hw'].forEach(id => $(id).addEventListener('input', d6)); d6();
+
+  // ── Charts (Demos 7 & 8): plain SVG, palette validated (dataviz method) ──
+  const NSVG = 'http://www.w3.org/2000/svg';
+  const mk = (t, a, p) => { const e = document.createElementNS(NSVG, t); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; };
+  const tipAt = (html, x, y) => { tipEl.innerHTML = html; tipEl.style.display = 'block';
+    const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+    let py = y - h - 14; if (py < 8) py = y + 18;
+    tipEl.style.left = Math.max(8, Math.min(x + 14, window.innerWidth - w - 8)) + 'px'; tipEl.style.top = py + 'px'; };
+  const KVKB = 35, CTXMAX = 262; // KV q8 KB/token (Qwen3.8-class hybrid attention), max context in k
+
+  // ── Demo 7: decode speed vs context ──
+  const C7MODELS = { dense: {w: 16, read: 16}, moe: {w: 48, read: 1.8} };
+  const C7S = [[7,'RTX 5090','#2a78d6'], [4,'RTX 3090','#eb6834'], [1,'Mac mini','#1baf7a'], [0,'MacBook Air','#eda100']];
+  function c7() {
+    const m = C7MODELS[$('c7m').value], svg = $('c7svg'); svg.innerHTML = '';
+    const W = 680, H = 300, L = 46, R = 116, T = 16, B = 34, iw = W - L - R, ih = H - T - B;
+    const S = C7S.map(([i, name, col]) => { const c = CARDS[i];
+      const maxK = Math.min(CTXMAX, Math.floor((c[1] - m.w - OVERHEAD) * 1e6 / KVKB / 1000));
+      return { name, col, c, maxK, fits: maxK >= 4, dec: k => c[2] * EFF / (m.read + k * KVKB / 1e3) }; });
+    $('c7legend').innerHTML = S.map(s => `<span class="chip"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${s.fits ? s.col : 'none'};border:2px solid ${s.fits ? s.col : '#898781'};vertical-align:-1px"></span> ${s.name}${s.fits ? '' : ` <span class="muted">— doesn't fit (needs ${fmt(m.w + OVERHEAD)}+ GB)</span>`}</span>`).join('');
+    const ymax = Math.ceil(Math.max(10, ...S.filter(s => s.fits).map(s => s.dec(0))) * 1.08 / 20) * 20;
+    const X = k => L + k / CTXMAX * iw, Y = v => T + ih - v / ymax * ih;
+    for (let g = 1; g <= 4; g++) { const v = ymax * g / 4;
+      mk('line', {x1: L, x2: L + iw, y1: Y(v), y2: Y(v), stroke: '#e1e0d9'}, svg);
+      mk('text', {x: L - 6, y: Y(v) + 4, 'text-anchor': 'end', fill: '#898781', 'font-size': 11}, svg).textContent = v; }
+    mk('line', {x1: L, x2: L + iw, y1: Y(0), y2: Y(0), stroke: '#c3c2b7'}, svg);
+    [0, 64, 128, 192, 262].forEach(k => { mk('text', {x: X(k), y: H - 14, 'text-anchor': 'middle', fill: '#898781', 'font-size': 11}, svg).textContent = k + 'k'; });
+    mk('text', {x: L + iw / 2, y: H - 2, 'text-anchor': 'middle', fill: '#898781', 'font-size': 11}, svg).textContent = 'context (tokens)';
+    mk('text', {x: 12, y: T + ih / 2, fill: '#898781', 'font-size': 11, 'text-anchor': 'middle', transform: `rotate(-90 12 ${T + ih / 2})`}, svg).textContent = 'decode tok/s';
+    S.forEach(s => { if (!s.fits) return;
+      let d = ''; for (let k = 0; k <= s.maxK; k += 2) d += (k ? 'L' : 'M') + X(k).toFixed(1) + ' ' + Y(s.dec(k)).toFixed(1) + ' ';
+      d += 'L' + X(s.maxK).toFixed(1) + ' ' + Y(s.dec(s.maxK)).toFixed(1);
+      mk('path', {d, fill: 'none', stroke: s.col, 'stroke-width': 2}, svg);
+      const ex = X(s.maxK), ey = Y(s.dec(s.maxK));
+      if (s.maxK < CTXMAX) {
+        mk('text', {x: ex, y: ey + 4, 'text-anchor': 'middle', fill: s.col, 'font-size': 13, 'font-weight': 700}, svg).textContent = '✕';
+        mk('text', {x: ex, y: ey + 17, 'text-anchor': 'middle', fill: '#898781', 'font-size': 10}, svg).textContent = 'out of memory';
+      }
+      const lx = s.maxK < CTXMAX ? ex + 10 : L + iw + 6;
+      mk('rect', {x: lx, y: ey - 4, width: 8, height: 8, rx: 2, fill: s.col}, svg);
+      mk('text', {x: lx + 12, y: ey + 4, fill: '#52514e', 'font-size': 11, 'font-weight': 600}, svg).textContent = s.name;
+    });
+    const hair = mk('line', {y1: T, y2: T + ih, stroke: '#c3c2b7', 'stroke-dasharray': '3 3', visibility: 'hidden'}, svg);
+    const ov = mk('rect', {x: L, y: T, width: iw, height: ih, fill: 'transparent'}, svg);
+    ov.addEventListener('mousemove', e => { const r = svg.getBoundingClientRect();
+      const k = Math.max(0, Math.min(CTXMAX, ((e.clientX - r.left) * W / r.width - L) / iw * CTXMAX));
+      hair.setAttribute('x1', X(k)); hair.setAttribute('x2', X(k)); hair.setAttribute('visibility', 'visible');
+      const rows = S.filter(s => s.fits).map(s => k <= s.maxK
+        ? `<span style="color:${s.col}">●</span> ${s.name}: <b>${fmt(s.dec(k), 0)} tok/s</b>`
+        : `<span style="color:#898781">●</span> ${s.name}: out of memory`).join('<br>');
+      tipAt(`<b>${fmt(k, 0)}k tokens of context</b><br>${rows}`, e.clientX, e.clientY); });
+    ov.addEventListener('mouseleave', () => { hide(); hair.setAttribute('visibility', 'hidden'); });
+  }
+  $('c7m').addEventListener('input', c7); c7();
+
+  // ── Demo 8: the machine map ──
+  const C8MODELS = { q27: {w: 16, read: 16}, q35: {w: 20, read: 1.8}, q80: {w: 48, read: 1.8}, q122: {w: 73, read: 5.9} };
+  const C8SHORT = ['Air 32', 'mini 64', 'Studio 128', '4070TiS 16', '3090 24', 'PRO4000 24', 'R9700 32', '5090 32', 'Spark 128'];
+  const C8DY = [-13, -13, -13, -13, -13, 21, 21, -13, 21]; // label above (−) or below (+) the dot
+  function c8() {
+    const m = C8MODELS[$('c8m').value], svg = $('c8svg'); svg.innerHTML = '';
+    const W = 680, H = 330, L = 52, R = 16, T = 18, B = 42, iw = W - L - R, ih = H - T - B;
+    const lx = v => L + (Math.log10(v) - Math.log10(12)) / (Math.log10(150) - Math.log10(12)) * iw;
+    const ly = v => T + ih - (Math.log10(v) - Math.log10(100)) / (Math.log10(2100) - Math.log10(100)) * ih;
+    [16, 24, 32, 64, 128].forEach(v => { mk('line', {x1: lx(v), x2: lx(v), y1: T, y2: T + ih, stroke: '#eeede8'}, svg);
+      mk('text', {x: lx(v), y: H - 26, 'text-anchor': 'middle', fill: '#898781', 'font-size': 11}, svg).textContent = v; });
+    [120, 273, 640, 936, 1792].forEach(v => { mk('line', {x1: L, x2: L + iw, y1: ly(v), y2: ly(v), stroke: '#eeede8'}, svg);
+      mk('text', {x: L - 6, y: ly(v) + 4, 'text-anchor': 'end', fill: '#898781', 'font-size': 10}, svg).textContent = fmt(v, 0); });
+    mk('text', {x: L + iw / 2, y: H - 8, 'text-anchor': 'middle', fill: '#898781', 'font-size': 11}, svg).textContent = 'usable memory (GB, log scale) →';
+    mk('text', {x: 14, y: T + ih / 2, fill: '#898781', 'font-size': 11, 'text-anchor': 'middle', transform: `rotate(-90 14 ${T + ih / 2})`}, svg).textContent = 'bandwidth (GB/s, log) →';
+    mk('text', {x: L + 10, y: T + 16, fill: '#c3c2b7', 'font-size': 11, 'font-style': 'italic'}, svg).textContent = 'fast but small';
+    mk('text', {x: L + iw - 10, y: T + ih - 8, 'text-anchor': 'end', fill: '#c3c2b7', 'font-size': 11, 'font-style': 'italic'}, svg).textContent = 'big but slow';
+    CARDS.forEach((c, i) => {
+      const fits = c[1] >= m.w + OVERHEAD + 4 * KVKB / 1e3;
+      const dec = c[2] * EFF / m.read;
+      const maxK = Math.min(CTXMAX, Math.floor((c[1] - m.w - OVERHEAD) * 1e6 / KVKB / 1000));
+      const x = lx(c[1]), y = ly(c[2]);
+      const dot = fits
+        ? mk('circle', {cx: x, cy: y, r: 7, fill: '#2a78d6', stroke: '#fcfcfb', 'stroke-width': 2}, svg)
+        : mk('circle', {cx: x, cy: y, r: 6, fill: 'none', stroke: '#898781', 'stroke-width': 2}, svg);
+      mk('text', {x, y: y + C8DY[i], 'text-anchor': 'middle', fill: fits ? '#0b0b0b' : '#898781', 'font-size': 11, 'font-weight': fits ? 600 : 400}, svg).textContent = C8SHORT[i];
+      if (fits) mk('text', {x, y: y + (C8DY[i] < 0 ? 19 : C8DY[i] + 12), 'text-anchor': 'middle', fill: '#52514e', 'font-size': 10}, svg).textContent = `~${fmt(dec, 0)} t/s`;
+      const detail = fits
+        ? `runs it: <b>~${fmt(dec, 0)} tok/s</b>, max context ~${fmt(maxK, 0)}k`
+        : `doesn't fit: needs ${fmt(m.w + OVERHEAD)} GB, has ${c[1]}`;
+      dot.addEventListener('mouseenter', e => tipAt(`<b>${c[0]}</b><br>${c[1]} GB usable · ${fmt(c[2], 0)} GB/s<br>${detail}`, e.clientX, e.clientY));
+      dot.addEventListener('mouseleave', hide);
+    });
+  }
+  $('c8m').addEventListener('input', c8); c8();
 })();
 </script>
 </body>
